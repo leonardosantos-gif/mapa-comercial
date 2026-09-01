@@ -6,7 +6,7 @@
  * Regra de contagem: um pedido nunca e somado duas vezes -- a unidade e o `uid`
  * (conta:id_pedido) e o valor e sempre `pedidos.total` (= valor da NF).
  */
-import { db } from './db.js';
+import { db, getMeta } from './db.js';
 import { NOME_UF } from './geo.js';
 
 const lista = (v) =>
@@ -444,9 +444,15 @@ export function porRepresentante(q) {
 /** Serie temporal (para acompanhar a mudanca de concentracao mes a mes). */
 export function porMes(q) {
   const { where, par } = construirFiltro(q);
-  return db.prepare(`
+  const linhas = db.prepare(`
     SELECT p.mes_ref,
            COALESCE(SUM(p.total), 0)       AS valor,
+           -- Faturamento pela SITUACAO, que vem da planilha (219 dos 223
+           -- lancamentos a tem). Nao usamos "data_faturamento" porque so 172
+           -- pedidos a tem preenchida: agrupar por ela faria agosto aparecer
+           -- com R$ 24 mil em vez de R$ 229 mil.
+           COALESCE(SUM(CASE WHEN p.faturado = 1 THEN p.total ELSE 0 END), 0) AS valor_faturado,
+           COUNT(DISTINCT CASE WHEN p.faturado = 1 THEN p.uid END) AS pedidos_faturados,
            COUNT(DISTINCT p.uid)           AS pedidos,
            COUNT(DISTINCT p.cliente_chave) AS clientes,
            COUNT(DISTINCT p.uf)            AS estados,
@@ -454,6 +460,16 @@ export function porMes(q) {
            COALESCE(SUM(p.qtd_pecas), 0)   AS pecas
       FROM pedidos p WHERE ${where} AND p.mes_ref IS NOT NULL
      GROUP BY p.mes_ref ORDER BY p.mes_ref`).all(...par);
+
+  // `declarado` = total que a planilha escreve no topo da aba mensal. Só existe
+  // para os meses que TEM aba mensal -- em 01/09/2026 a planilha ficou apenas
+  // com AGOSTO2026 e SETEMBRO2026, e os meses anteriores passaram a vir das
+  // abas de status. Por isso o grafico de faturamento usa `valor_faturado`, que
+  // existe em todos os meses, e traz o declarado apenas como conferencia.
+  let declarados = [];
+  try { declarados = JSON.parse(getMeta('totais_planilha') ?? '[]'); } catch { declarados = []; }
+  const porMesDeclarado = new Map(declarados.map((d) => [d.mes_ref, d.total_planilha]));
+  return linhas.map((l) => ({ ...l, declarado: porMesDeclarado.get(l.mes_ref) ?? null }));
 }
 
 /** Concentracao por UF ao longo dos meses (share % por mes). */

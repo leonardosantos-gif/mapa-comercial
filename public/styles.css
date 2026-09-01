@@ -503,3 +503,15 @@ main { padding: 14px 20px 28px; }
   background: rgba(0, 0, 0, .06);
   font-size: 12px;
 }
+
+/* Nota de escopo: avisa quando um numero nao responde aos filtros ativos */
+.nota-fixa {
+  margin: 0 0 8px;
+  padding: 7px 10px;
+  border-left: 3px solid #e0b34a;
+  background: #fdf8ec;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #6b5a2e;
+}

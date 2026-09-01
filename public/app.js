@@ -994,6 +994,102 @@
   }
 
   /**
+   * Faturamento mensal declarado na planilha (topo de cada aba mensal).
+   *
+   * Fonte diferente do grafico de cima de proposito: aquele soma os lancamentos
+   * (e responde aos filtros), este e o total que o comercial declara no mes. Sao
+   * numeros que nao batem sempre -- a divergencia e informacao, nao defeito, e o
+   * tooltip mostra os dois lado a lado.
+   */
+  function renderGraficoFaturamento(meses, alvo = '#grafico-faturamento') {
+    const el = $(alvo);
+    el.innerHTML = '';
+    const nota = $('#nota-faturamento');
+    if (!meses.length) {
+      el.innerHTML = '<div class="g-vazio">Sem período no filtro atual.</div>';
+      if (nota) nota.hidden = true;
+      return;
+    }
+
+    // O declarado e um total de aba: um numero por mes, da planilha inteira.
+    // Com filtro de recorte ativo ele deixa de ser comparavel com as barras,
+    // entao sai do tooltip -- senao convida a comparar Key Accounts de agosto
+    // (R$ 66 mil) com o total declarado do mes (R$ 333 mil).
+    const recorteAtivo = ['rep', 'cliente', 'uf', 'municipio', 'produto', 'sku', 'busca']
+      .some((k) => (Array.isArray(st.filtros[k]) ? st.filtros[k].length : st.filtros[k]));
+    if (nota) {
+      const comDeclarado = meses.filter((d) => d.declarado != null).map((d) => fMes(d.mes_ref));
+      nota.hidden = false;
+      nota.textContent = recorteAtivo
+        ? 'Faturado pela situação do pedido na planilha, dentro dos filtros ativos. '
+          + 'O total declarado nas abas mensais não entra na comparação: é um número da planilha inteira, não recortável.'
+        : (comDeclarado.length
+          ? `Faturado pela situação do pedido na planilha. Há total declarado na aba mensal para ${comDeclarado.join(', ')} — nos outros meses não há com o que conferir.`
+          : 'Faturado pela situação do pedido na planilha. Nenhum mês do filtro tem aba mensal com total declarado para conferência.');
+    }
+
+    const larg = el.clientWidth || 520;
+    const alt = 220;
+    const m = { t: 14, d: 16, b: 30, e: 54 };
+    const svg = d3.select(el).append('svg')
+      .attr('viewBox', `0 0 ${larg} ${alt}`)
+      .attr('width', '100%').attr('height', alt);
+
+    const x = d3.scaleBand().domain(meses.map((d) => d.mes_ref)).range([m.e, larg - m.d]).padding(0.28);
+    const y = d3.scaleLinear().domain([0, d3.max(meses, (d) => d.valor) * 1.1 || 1]).nice().range([alt - m.b, m.t]);
+
+    svg.append('g').attr('transform', `translate(0,${alt - m.b})`)
+      .call(d3.axisBottom(x).tickFormat(fMes).tickSize(0))
+      .call((g) => g.select('.domain').attr('stroke', '#e4e8ee'))
+      .call((g) => g.selectAll('text').attr('fill', '#5b6472').attr('font-size', 10));
+    svg.append('g').attr('transform', `translate(${m.e},0)`)
+      .call(d3.axisLeft(y).ticks(4).tickFormat(fCompacto).tickSize(-(larg - m.e - m.d)))
+      .call((g) => g.select('.domain').remove())
+      .call((g) => g.selectAll('line').attr('stroke', '#eef1f5'))
+      .call((g) => g.selectAll('text').attr('fill', '#8a94a3').attr('font-size', 10));
+
+    // fundo = vendido no mes; barra cheia = a parte que esta faturada. A altura
+    // da barra clara e a leitura direta do que falta faturar.
+    svg.append('g').selectAll('rect').data(meses).join('rect')
+      .attr('x', (d) => x(d.mes_ref))
+      .attr('width', x.bandwidth())
+      .attr('y', (d) => y(d.valor))
+      .attr('height', (d) => Math.max(0, alt - m.b - y(d.valor)))
+      .attr('rx', 3)
+      .attr('fill', '#eef1f5');
+
+    const barras = svg.append('g').selectAll('rect').data(meses).join('rect')
+      .attr('x', (d) => x(d.mes_ref))
+      .attr('width', x.bandwidth())
+      .attr('y', (d) => y(d.valor_faturado))
+      .attr('height', (d) => Math.max(0, alt - m.b - y(d.valor_faturado)))
+      .attr('rx', 3)
+      .attr('fill', '#8e2338')
+      .style('cursor', 'pointer');
+
+    barras
+      .on('mousemove', (ev, d) => {
+        const aberto = d.valor - d.valor_faturado;
+        const pct = d.valor ? (d.valor_faturado / d.valor) * 100 : 0;
+        mostrarTip(ev, `
+        <div class="tt-tit">${fMesLongo(d.mes_ref)}</div>
+        <div class="tt-linha"><span>Faturado</span><b>${fMoedaC(d.valor_faturado)}</b></div>
+        <div class="tt-linha"><span>Vendido</span><b>${fMoedaC(d.valor)}</b></div>
+        <div class="tt-linha"><span>% faturado</span><b>${pct.toFixed(0)}%</b></div>
+        <div class="tt-linha"><span>A faturar</span><b>${fMoedaC(aberto)}</b></div>
+        <div class="tt-linha"><span>Pedidos faturados</span><b>${fNum(d.pedidos_faturados)} de ${fNum(d.pedidos)}</b></div>
+        ${d.declarado != null && !recorteAtivo ? `<div class="tt-linha"><span>Declarado na planilha</span><b>${fMoedaC(d.declarado)}</b></div>` : ''}
+        <div class="tt-dica">Clique para filtrar só este mês</div>`);
+      })
+      .on('mouseleave', esconderTip)
+      .on('click', (ev, d) => {
+        st.filtros.meses = [d.mes_ref];
+        montarDropdowns();
+        aplicarFiltros();
+      });
+  }
+
+  /**
    * Barras agrupadas por mes: um grupo por mes, uma barra por ano.
    * Os anos anteriores vem do cabecalho das abas mensais (mesma fonte da tabela
    * "Comparativo histórico"), entao o grafico e a tabela contam a mesma coisa.
@@ -1741,6 +1837,7 @@
     renderKpis(d.resumo);
     MapaBrasil.definirEstados(st.estados);
     renderGraficoMeses(d.meses);
+    renderGraficoFaturamento(d.meses);
     renderBarrasProdutos('#barras-produtos', d.produtos);
 
     if (st.nivel.uf) {
