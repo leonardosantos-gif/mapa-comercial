@@ -148,7 +148,7 @@ ERP). Quando a carteira troca de dono e a planilha ainda não reflete isso, edit
   "cliente": "JACK HOPS & CO LTDA",
   "representante": "Leonardo Cruz",
   "definido_em": "2026-08-31",
-  "obs": "carteira transferida de Daniel Sartori"
+  "obs": "reatribuição de carteira"
 }
 ```
 
