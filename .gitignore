@@ -1,0 +1,19 @@
+# credenciais -- nunca versionar
+.env
+
+# dados gerados (banco, cache geografico) e logs
+data/
+logs/
+*.log
+*.db
+*.db-wal
+*.db-shm
+*.bak
+*.bak[0-9]
+
+# dependencias
+node_modules/
+
+# temporarios
+*.tmp
+*.tmp.mjs

@@ -1,0 +1,21 @@
+{
+  "name": "mapa-comercial-fiber",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Mapa Comercial Interativo Fiber - concentracao geografica de vendas B2B (Tiny/Olist + planilha comercial)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "geo": "node src/geo.js",
+    "sync": "node src/sync.js",
+    "sync:full": "node src/sync.js --full"
+  },
+  "engines": { "node": ">=22.5.0" },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2"
+  }
+}

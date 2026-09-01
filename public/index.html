@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapa Comercial · Fiber</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topo">
+  <div class="marca">
+    <span class="losango"></span>
+    <div>
+      <strong>FIBER</strong>
+      <small>Mapa Comercial</small>
+    </div>
+  </div>
+
+  <nav class="nav" id="nav">
+    <button class="nav-item ativo" data-view="dashboard">Dashboard</button>
+    <button class="nav-item" data-view="estados">Estados</button>
+    <button class="nav-item" data-view="clientes">Clientes</button>
+    <button class="nav-item" data-view="vendas">Vendas</button>
+    <button class="nav-item" data-view="produtos">Produtos</button>
+    <button class="nav-item" data-view="representantes">Representantes</button>
+    <button class="nav-item" data-view="carteira">Carteira</button>
+    <button class="nav-item" data-view="prospeccao">Prospecção</button>
+    <button class="nav-item" data-view="alertas">Alertas <span class="badge" id="badge-alertas"></span></button>
+    <button class="nav-item" data-view="admin">Dados</button>
+  </nav>
+
+  <div class="filtros" id="filtros">
+    <div class="filtro" data-filtro="rep">
+      <button class="filtro-btn"><span class="filtro-rot">Representante</span><span class="filtro-val" id="rot-rep">Todos</span></button>
+      <div class="dropdown" id="dd-rep"></div>
+    </div>
+    <div class="filtro" data-filtro="cliente">
+      <button class="filtro-btn"><span class="filtro-rot">Cliente</span><span class="filtro-val" id="rot-cliente">Todos</span></button>
+      <div class="dropdown" id="dd-cliente"></div>
+    </div>
+    <div class="filtro" data-filtro="meses">
+      <button class="filtro-btn"><span class="filtro-rot">Período</span><span class="filtro-val" id="rot-meses">Todos</span></button>
+      <div class="dropdown" id="dd-meses"></div>
+    </div>
+    <div class="filtro" data-filtro="uf">
+      <button class="filtro-btn"><span class="filtro-rot">Estado</span><span class="filtro-val" id="rot-uf">Todos</span></button>
+      <div class="dropdown" id="dd-uf"></div>
+    </div>
+    <div class="filtro" data-filtro="tipo">
+      <button class="filtro-btn"><span class="filtro-rot">Operação</span><span class="filtro-val" id="rot-tipo">Todas</span></button>
+      <div class="dropdown" id="dd-tipo"></div>
+    </div>
+    <button class="limpar" id="btn-limpar" title="Limpar todos os filtros">Limpar</button>
+  </div>
+</header>
+
+<div class="chips" id="chips"></div>
+
+<main id="main">
+
+  <!-- ============================ DASHBOARD ============================ -->
+  <section class="view ativa" id="view-dashboard">
+    <div class="kpis" id="kpis"></div>
+
+    <div class="grade-mapa">
+      <div class="painel mapa-painel">
+        <div class="painel-topo">
+          <div class="breadcrumb" id="breadcrumb"></div>
+          <div class="controles-mapa">
+            <div class="seg" id="seg-metrica">
+              <button data-metrica="valor" class="ativo">Valor vendido</button>
+              <button data-metrica="pedidos">Pedidos</button>
+              <button data-metrica="produtos">Produtos</button>
+            </div>
+            <button class="btn-ghost" id="btn-brasil">Ver Brasil</button>
+          </div>
+        </div>
+        <div class="mapa-wrap">
+          <svg id="mapa"></svg>
+          <div class="legenda" id="legenda"></div>
+          <div class="mapa-vazio" id="mapa-vazio" hidden>Nenhuma venda no filtro atual.</div>
+        </div>
+      </div>
+
+      <aside class="painel lateral">
+        <div class="lateral-topo">
+          <h3 id="titulo-ranking">Ranking de estados</h3>
+          <button class="ordena" id="ordem-ranking" data-ordem="desc" title="Inverter ordenação">↓ Maior</button>
+        </div>
+        <div class="ranking" id="ranking-lateral"></div>
+      </aside>
+    </div>
+
+    <div class="grade-baixo">
+      <div class="painel">
+        <div class="painel-topo"><h3>Produtos mais vendidos</h3>
+          <select class="select-mini" id="ordem-prod-dash">
+            <option value="valor_desc">Maior faturamento</option>
+            <option value="valor_asc">Menor faturamento</option>
+            <option value="qtd_desc">Maior quantidade</option>
+            <option value="qtd_asc">Menor quantidade</option>
+          </select>
+        </div>
+        <div class="barras" id="barras-produtos"></div>
+      </div>
+      <div class="painel">
+        <div class="painel-topo"><h3>Evolução mensal</h3><span class="dica">valor vendido por mês</span></div>
+        <div id="grafico-meses"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ ESTADOS ============================ -->
+  <section class="view" id="view-estados">
+    <div class="painel">
+      <div class="painel-topo"><h3>Análise por estado</h3><span class="dica" id="dica-estados"></span></div>
+      <div class="tabela-wrap"><table class="tabela" id="tab-estados"></table></div>
+    </div>
+  </section>
+
+  <!-- ============================ CLIENTES ============================ -->
+  <section class="view" id="view-clientes">
+    <div class="painel">
+      <div class="painel-topo"><h3>Clientes</h3>
+        <input class="busca" id="busca-cliente" placeholder="Buscar cliente...">
+      </div>
+      <div class="tabela-wrap"><table class="tabela" id="tab-clientes"></table></div>
+    </div>
+  </section>
+
+  <!-- ============================ PRODUTOS ============================ -->
+  <section class="view" id="view-produtos">
+    <div class="painel">
+      <div class="painel-topo"><h3>Ranking de produtos</h3>
+        <div class="painel-acoes">
+          <input class="busca" id="busca-produto" placeholder="Buscar produto...">
+          <div class="seg" id="seg-nivel">
+            <button data-nivel="produto" class="ativo">Por produto</button>
+            <button data-nivel="sku">Por SKU</button>
+          </div>
+        </div>
+      </div>
+      <div class="barras" id="barras-produtos-full"></div>
+      <div class="tabela-wrap"><table class="tabela" id="tab-produtos"></table></div>
+    </div>
+  </section>
+
+  <!-- ========================= REPRESENTANTES ========================= -->
+  <section class="view" id="view-representantes">
+    <div class="painel">
+      <div class="painel-topo"><h3>Performance por representante</h3>
+        <span class="dica">clique para filtrar o mapa por representante</span></div>
+      <div class="tabela-wrap"><table class="tabela" id="tab-reps"></table></div>
+    </div>
+  </section>
+
+  <!-- ============================= VENDAS ============================= -->
+  <section class="view" id="view-vendas">
+    <div class="kpis" id="kpis-vendas"></div>
+    <div class="grade-baixo">
+      <div class="painel">
+        <div class="painel-topo"><h3>Evolução mensal</h3>
+          <span class="dica">valor lançado por mês de competência</span></div>
+        <div id="grafico-vendas-mes"></div>
+      </div>
+      <div class="painel">
+        <div class="painel-topo"><h3>Comparativo histórico (YoY)</h3>
+          <span class="dica">mesmo mês nos três anos · fonte: cabeçalho das abas mensais</span></div>
+        <div class="tabela-wrap"><table class="tabela" id="tab-yoy"></table></div>
+      </div>
+    </div>
+    <div class="painel" style="margin-top:12px">
+      <div class="painel-topo"><h3>Detalhe mensal</h3>
+        <span class="dica">pedidos, clientes ativos e clientes novos por mês</span></div>
+      <div class="tabela-wrap"><table class="tabela" id="tab-vendas-mes"></table></div>
+    </div>
+  </section>
+
+  <!-- ============================ CARTEIRA ============================ -->
+  <section class="view" id="view-carteira">
+    <div class="kpis" id="kpis-concentracao"></div>
+    <div class="grade-baixo">
+      <div class="painel">
+        <div class="painel-topo"><h3>Curva de Pareto — Top 10 clientes</h3>
+          <span class="dica">barra = faturado · linha = acumulado</span></div>
+        <div class="barras" id="barras-pareto"></div>
+      </div>
+      <div class="painel">
+        <div class="painel-topo"><h3>Recência da carteira</h3>
+          <span class="dica" id="dica-carteira"></span></div>
+        <div class="cartoes-alerta" id="cards-carteira"></div>
+      </div>
+    </div>
+    <div class="painel" style="margin-top:12px">
+      <div class="painel-topo"><h3>Clientes por recência</h3>
+        <div class="painel-acoes">
+          <input class="busca" id="busca-carteira" placeholder="Buscar cliente...">
+          <div class="seg" id="seg-carteira">
+            <button data-estado="todos" class="ativo">Todos</button>
+            <button data-estado="ativo">Ativos</button>
+            <button data-estado="risco">Em risco</button>
+            <button data-estado="dormente">Dormentes</button>
+          </div>
+        </div>
+      </div>
+      <div class="tabela-wrap"><table class="tabela" id="tab-carteira"></table></div>
+    </div>
+  </section>
+
+  <!-- =========================== PROSPECÇÃO =========================== -->
+  <section class="view" id="view-prospeccao">
+    <div class="kpis" id="kpis-prospeccao"></div>
+    <div class="kpis" id="kpis-prospeccao-2"></div>
+    <div class="grade-baixo">
+      <div class="painel">
+        <div class="painel-topo"><h3>Por canal</h3><span class="dica">disparos e retorno</span></div>
+        <div class="tabela-wrap"><table class="tabela" id="tab-leads-canal"></table></div>
+      </div>
+      <div class="painel">
+        <div class="painel-topo"><h3>Por segmento</h3><span class="dica">onde a prospecção foi feita</span></div>
+        <div class="tabela-wrap"><table class="tabela" id="tab-leads-segmento"></table></div>
+      </div>
+    </div>
+    <div class="painel" style="margin-top:12px">
+      <div class="painel-topo"><h3>Campanhas</h3>
+        <input class="busca" id="busca-campanha" placeholder="Buscar campanha...">
+      </div>
+      <div class="tabela-wrap"><table class="tabela" id="tab-campanhas"></table></div>
+    </div>
+    <div class="painel" style="margin-top:12px">
+      <div class="painel-topo"><h3>Amostras e brindes enviados</h3>
+        <span class="dica" id="dica-amostras">fora do faturamento — aba AMOSTRAS</span></div>
+      <div class="kpis" id="kpis-amostras" style="margin:12px 15px"></div>
+      <div class="tabela-wrap"><table class="tabela" id="tab-amostras"></table></div>
+    </div>
+  </section>
+
+  <!-- ============================ ALERTAS ============================ -->
+  <section class="view" id="view-alertas">
+    <div class="painel">
+      <div class="painel-topo"><h3>Alertas de dados</h3>
+        <span class="dica">inconsistências entre a planilha, o ERP e a base geográfica</span></div>
+      <div id="resumo-alertas" class="cartoes-alerta"></div>
+      <div class="tabela-wrap"><table class="tabela" id="tab-alertas"></table></div>
+    </div>
+    <div class="painel">
+      <div class="painel-topo"><h3>Pedidos fora da contagem de vendas</h3>
+        <span class="dica">regras de negócio aplicadas ao consolidar as fontes</span></div>
+      <div class="tabela-wrap"><table class="tabela" id="tab-excluidos"></table></div>
+    </div>
+  </section>
+
+  <!-- ============================= DADOS ============================= -->
+  <section class="view" id="view-admin">
+    <div class="grade-admin">
+      <div class="painel">
+        <div class="painel-topo"><h3>Sincronização</h3></div>
+        <div id="admin-status" class="admin-status"></div>
+        <div class="admin-acoes">
+          <button class="btn" id="btn-sync">Sincronizar dados agora</button>
+          <button class="btn-ghost" id="btn-sync-full">Recarregar tudo (ignora cache)</button>
+          <button class="btn-ghost" id="btn-conexao">Testar conexão com a API</button>
+        </div>
+        <pre class="saida" id="admin-saida" hidden></pre>
+      </div>
+      <div class="painel">
+        <div class="painel-topo"><h3>Conferência: planilha × consolidado</h3></div>
+        <div class="tabela-wrap"><table class="tabela" id="tab-conferencia"></table></div>
+      </div>
+      <div class="painel">
+        <div class="painel-topo"><h3>Abas lidas da planilha</h3></div>
+        <div class="tabela-wrap"><table class="tabela" id="tab-abas"></table></div>
+      </div>
+      <div class="painel">
+        <div class="painel-topo"><h3>Ajustes de carteira</h3>
+          <span class="dica" id="dica-ajustes"></span></div>
+        <div class="tabela-wrap"><table class="tabela" id="tab-ajustes"></table></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- painel lateral de detalhe (cidade -> clientes -> produtos) -->
+<div class="gaveta-fundo" id="gaveta-fundo" hidden></div>
+<aside class="gaveta" id="gaveta" hidden>
+  <div class="gaveta-topo">
+    <div>
+      <div class="gaveta-sub" id="gaveta-sub"></div>
+      <h2 id="gaveta-titulo"></h2>
+    </div>
+    <button class="fechar" id="gaveta-fechar" aria-label="Fechar">×</button>
+  </div>
+  <div class="gaveta-corpo" id="gaveta-corpo"></div>
+</aside>
+
+<div class="tooltip" id="tooltip" hidden></div>
+<div class="balao" id="balao" hidden>
+  <button class="balao-fechar" id="balao-fechar" aria-label="Fechar">×</button>
+  <div class="balao-corpo" id="balao-corpo"></div>
+</div>
+<div class="carregando" id="carregando" hidden><span></span></div>
+
+<script src="vendor/d3.v7.min.js"></script>
+<script src="mapa.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

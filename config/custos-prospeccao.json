@@ -1,0 +1,10 @@
+{
+  "descricao": "Custo da prospeccao. O custo e cobrado por MENSAGEM ENTREGUE (nao por enviada): disparo que falhou nao gera custo. `por_canal` sobrepoe o padrao para o canal informado (casamento por texto contido, sem acento e sem caixa).",
+  "custo_por_mensagem_entregue": 0.32,
+  "moeda": "BRL",
+  "por_canal": {
+    "e-mail": 0
+  },
+  "definido_em": "2026-09-01",
+  "obs": "0,32 por entrega informado pelo Leonardo (SleekFlow/WhatsApp). E-mail em 0 por nao ter custo por mensagem; ajuste aqui se passar a ter."
+}
