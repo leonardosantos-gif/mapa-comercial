@@ -447,12 +447,15 @@ export function porMes(q) {
   const linhas = db.prepare(`
     SELECT p.mes_ref,
            COALESCE(SUM(p.total), 0)       AS valor,
-           -- Faturamento pela SITUACAO, que vem da planilha (219 dos 223
-           -- lancamentos a tem). Nao usamos "data_faturamento" porque so 172
-           -- pedidos a tem preenchida: agrupar por ela faria agosto aparecer
-           -- com R$ 24 mil em vez de R$ 229 mil.
-           COALESCE(SUM(CASE WHEN p.faturado = 1 THEN p.total ELSE 0 END), 0) AS valor_faturado,
-           COUNT(DISTINCT CASE WHEN p.faturado = 1 THEN p.uid END) AS pedidos_faturados,
+           -- Faturamento = linhas que vieram da aba PEDIDOS FATURADOS da
+           -- planilha, que e a fonte que o comercial usa. Nao e derivado da
+           -- situacao do pedido nem da "data_faturamento" (esta ultima existe
+           -- em so 172 dos 223 lancamentos).
+           -- Atencao: a aba nao cobre os meses que tem aba mensal propria --
+           -- agosto/2026 esta em AGOSTO2026, entao fica fora desta soma. A tela
+           -- avisa quais meses do filtro nao tem linha nesta aba.
+           COALESCE(SUM(CASE WHEN p.aba = 'PEDIDOS FATURADOS' THEN p.total ELSE 0 END), 0) AS valor_faturado,
+           COUNT(DISTINCT CASE WHEN p.aba = 'PEDIDOS FATURADOS' THEN p.uid END) AS pedidos_faturados,
            COUNT(DISTINCT p.uid)           AS pedidos,
            COUNT(DISTINCT p.cliente_chave) AS clientes,
            COUNT(DISTINCT p.uf)            AS estados,

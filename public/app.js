@@ -1013,19 +1013,20 @@
 
     // O declarado e um total de aba: um numero por mes, da planilha inteira.
     // Com filtro de recorte ativo ele deixa de ser comparavel com as barras,
-    // entao sai do tooltip -- senao convida a comparar Key Accounts de agosto
-    // (R$ 66 mil) com o total declarado do mes (R$ 333 mil).
+    // entao sai do tooltip.
     const recorteAtivo = ['rep', 'cliente', 'uf', 'municipio', 'produto', 'sku', 'busca']
       .some((k) => (Array.isArray(st.filtros[k]) ? st.filtros[k].length : st.filtros[k]));
+
+    // A aba PEDIDOS FATURADOS nao cobre mes que tenha aba mensal propria
+    // (agosto/2026 esta em AGOSTO2026). Sem este aviso, a barra vazia parece
+    // mes sem faturamento.
     if (nota) {
-      const comDeclarado = meses.filter((d) => d.declarado != null).map((d) => fMes(d.mes_ref));
+      const semLinha = meses.filter((d) => !d.valor_faturado && d.valor).map((d) => fMes(d.mes_ref));
       nota.hidden = false;
-      nota.textContent = recorteAtivo
-        ? 'Faturado pela situação do pedido na planilha, dentro dos filtros ativos. '
-          + 'O total declarado nas abas mensais não entra na comparação: é um número da planilha inteira, não recortável.'
-        : (comDeclarado.length
-          ? `Faturado pela situação do pedido na planilha. Há total declarado na aba mensal para ${comDeclarado.join(', ')} — nos outros meses não há com o que conferir.`
-          : 'Faturado pela situação do pedido na planilha. Nenhum mês do filtro tem aba mensal com total declarado para conferência.');
+      nota.textContent = 'Faturamento conforme a aba PEDIDOS FATURADOS da planilha.'
+        + (semLinha.length
+          ? ` ${semLinha.join(', ')} não aparece nessa aba — está na aba mensal do próprio mês, então fica fora desta soma.`
+          : '');
     }
 
     const larg = el.clientWidth || 520;
@@ -1073,11 +1074,11 @@
         const pct = d.valor ? (d.valor_faturado / d.valor) * 100 : 0;
         mostrarTip(ev, `
         <div class="tt-tit">${fMesLongo(d.mes_ref)}</div>
-        <div class="tt-linha"><span>Faturado</span><b>${fMoedaC(d.valor_faturado)}</b></div>
-        <div class="tt-linha"><span>Vendido</span><b>${fMoedaC(d.valor)}</b></div>
-        <div class="tt-linha"><span>% faturado</span><b>${pct.toFixed(0)}%</b></div>
-        <div class="tt-linha"><span>A faturar</span><b>${fMoedaC(aberto)}</b></div>
-        <div class="tt-linha"><span>Pedidos faturados</span><b>${fNum(d.pedidos_faturados)} de ${fNum(d.pedidos)}</b></div>
+        <div class="tt-linha"><span>Faturado (aba)</span><b>${fMoedaC(d.valor_faturado)}</b></div>
+        <div class="tt-linha"><span>Total lançado no mês</span><b>${fMoedaC(d.valor)}</b></div>
+        <div class="tt-linha"><span>% na aba de faturados</span><b>${pct.toFixed(0)}%</b></div>
+        <div class="tt-linha"><span>Fora da aba</span><b>${fMoedaC(aberto)}</b></div>
+        <div class="tt-linha"><span>Pedidos na aba</span><b>${fNum(d.pedidos_faturados)} de ${fNum(d.pedidos)}</b></div>
         ${d.declarado != null && !recorteAtivo ? `<div class="tt-linha"><span>Declarado na planilha</span><b>${fMoedaC(d.declarado)}</b></div>` : ''}
         <div class="tt-dica">Clique para filtrar só este mês</div>`);
       })
