@@ -30,11 +30,48 @@ export const SNAPSHOT_PATH = path.join(DATA_DIR, 'snapshot', 'mapa-fiber.db');
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-export let veioDoSnapshot = false;
-if (!fs.existsSync(DB_PATH) && fs.existsSync(SNAPSHOT_PATH)) {
+/** `ultima_sync` gravada num arquivo de banco, ou null se nao der para ler. */
+function ultimaSyncDe(arquivo) {
+  try {
+    const d = new DatabaseSync(arquivo, { readOnly: true });
+    const r = d.prepare("SELECT valor FROM meta WHERE chave = 'ultima_sync'").get();
+    d.close();
+    return r?.valor ?? null;
+  } catch {
+    return null; // banco novo, sem a tabela, ou ilegivel
+  }
+}
+
+/** Troca o banco de trabalho pelo snapshot, guardando o anterior. */
+function adotarSnapshot(motivo) {
+  if (fs.existsSync(DB_PATH)) {
+    fs.rmSync(`${DB_PATH}.anterior`, { force: true });
+    fs.renameSync(DB_PATH, `${DB_PATH}.anterior`);
+    // WAL/SHM pertencem ao banco antigo: deixa-los para tras corromperia o novo
+    for (const sufixo of ['-wal', '-shm']) fs.rmSync(DB_PATH + sufixo, { force: true });
+  }
   fs.copyFileSync(SNAPSHOT_PATH, DB_PATH);
-  veioDoSnapshot = true;
-  console.log('Banco inicializado a partir do snapshot do repositorio.');
+  console.log(`Banco atualizado a partir do snapshot do repositorio (${motivo}).`);
+}
+
+export let veioDoSnapshot = false;
+if (fs.existsSync(SNAPSHOT_PATH)) {
+  if (!fs.existsSync(DB_PATH)) {
+    adotarSnapshot('primeira execucao');
+    veioDoSnapshot = true;
+  } else {
+    // Depois de um `git pull`, o snapshot pode trazer dados mais novos que o
+    // banco local. Comparar `ultima_sync` e mais seguro que comparar a data do
+    // arquivo: quem sincroniza tem o banco sempre igual ou a frente do snapshot
+    // que ele mesmo gerou, entao neste caso nada e sobrescrito. Sem isso, quem
+    // recebe o repositorio precisaria apagar o banco na mao a cada atualizacao.
+    const doSnapshot = ultimaSyncDe(SNAPSHOT_PATH);
+    const doTrabalho = ultimaSyncDe(DB_PATH);
+    if (doSnapshot && (!doTrabalho || doSnapshot > doTrabalho)) {
+      adotarSnapshot(`snapshot de ${doSnapshot} > local ${doTrabalho ?? 'sem sync'}`);
+      veioDoSnapshot = true;
+    }
+  }
 }
 
 export const db = new DatabaseSync(DB_PATH);

@@ -1612,6 +1612,20 @@
       <div class="as ${s.alertas ? '' : 'ok'}"><div class="r">Alertas de dados</div><div class="v">${fNum(s.alertas)}</div>
         <div class="s">${ur ? `${fNum(ur.reaproveitados_do_cache ?? 0)} pedidos vindos do cache` : ''}</div></div>`;
 
+    // Modo somente-leitura: sem credenciais nao ha o que sincronizar. Esconder
+    // os botoes evita o pior caso -- clicar, ler "iniciado" e nada mudar.
+    const aviso = $('#aviso-leitura');
+    for (const id of ['#btn-sync', '#btn-sync-full', '#btn-conexao']) {
+      $(id).hidden = Boolean(s.somente_leitura);
+    }
+    aviso.hidden = !s.somente_leitura;
+    if (s.somente_leitura) {
+      aviso.innerHTML = 'Modo somente-leitura: este computador não tem as credenciais da API. '
+        + 'Os dados vêm do snapshot que veio no repositório'
+        + (s.banco_do_snapshot ? ' (adotado nesta inicialização)' : '')
+        + '. Para receber dados novos: <code>git pull</code> e reinicie o servidor.';
+    }
+
     atualizarBadgeAlertas(s.alertas);
 
     const conf = s.planilha.totais_mensais ?? [];

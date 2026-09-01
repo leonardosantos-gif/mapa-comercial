@@ -485,3 +485,21 @@ main { padding: 14px 20px 28px; }
   .painel-topo { flex-wrap: wrap; }
   .painel-acoes { flex-wrap: wrap; }
 }
+
+/* Aviso de modo somente-leitura (ambiente sem credenciais, dados do snapshot) */
+.aviso-leitura {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--borda-forte, #c8ced8);
+  background: var(--fundo-suave, #f4f6f9);
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--texto-medio, #4a5261);
+}
+.aviso-leitura code {
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, .06);
+  font-size: 12px;
+}

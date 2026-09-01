@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { db, getMeta } from './src/db.js';
+import { db, getMeta, veioDoSnapshot } from './src/db.js';
 import * as ag from './src/agregados.js';
 import * as com from './src/comercial.js';
 import { sincronizar, estadoSync, gerarAlertas } from './src/sync.js';
@@ -166,6 +166,11 @@ app.get('/api/admin/status', async (req, res) => {
         totais_mensais: JSON.parse(getMeta('totais_planilha') ?? '[]'),
       },
       alertas: nAlertas,
+      // modo somente-leitura: quem recebeu o repositorio nao tem .env e ve os
+      // dados do snapshot. A tela usa isso para nao oferecer o botao de sync.
+      somente_leitura: !credenciais.completo,
+      credenciais: { tiny_b2b: credenciais.b2b, tiny_matriz: credenciais.matriz, planilha: credenciais.planilha },
+      banco_do_snapshot: veioDoSnapshot,
       ajustes_carteira: listarAjustes(),
       agendamento,
       api: {
@@ -192,6 +197,18 @@ app.get('/api/admin/conexao', async (req, res) => {
 });
 
 app.post('/api/admin/sync', async (req, res) => {
+  // Sem credenciais nao da para sincronizar. Recusar aqui e essencial: a
+  // resposta e enviada ANTES do sync rodar, entao sem esta guarda o botao
+  // responderia "iniciado" e a falha morreria no console do servidor -- quem
+  // recebeu o repositorio veria sucesso e nenhum dado novo.
+  if (!credenciais.completo) {
+    return res.status(403).json({
+      erro: 'Este ambiente esta em modo somente-leitura (sem credenciais no .env). '
+        + 'Os dados vem do snapshot do repositorio: para atualizar, rode "git pull" '
+        + 'e reinicie o servidor.',
+      somente_leitura: true,
+    });
+  }
   if (estadoSync.rodando) {
     return res.status(409).json({ erro: 'Sincronizacao ja em andamento', etapa: estadoSync.etapa });
   }

@@ -68,9 +68,19 @@ funciona com o servidor no ar). Depois:
 git add data/snapshot/mapa-fiber.db && git commit -m "Atualiza snapshot dos dados"
 ```
 
-Quem já clonou antes recebe o snapshot novo com `git pull`, mas o banco de trabalho
-dele **não** é sobrescrito (a cópia só acontece quando não existe banco). Para forçar,
-apague `data/mapa-fiber.db` e suba o servidor de novo.
+Quem já clonou recebe o snapshot novo com `git pull` e **só precisa reiniciar o
+servidor**: na subida, o banco de trabalho é trocado pelo snapshot se o snapshot tiver
+`ultima_sync` mais recente. O banco anterior fica em `data/mapa-fiber.db.anterior`.
+
+A comparação é por `ultima_sync` gravada no `meta`, não pela data do arquivo, e é isso
+que protege quem sincroniza: o banco de quem roda o sync está sempre igual ou à frente
+do snapshot que ele mesmo gerou, então nada é sobrescrito. Confira em **Dados**:
+`somente_leitura` e `banco_do_snapshot` aparecem em `/api/admin/status`.
+
+No ambiente sem credenciais os botões de sincronização **não aparecem** — no lugar
+deles fica o aviso com a instrução do `git pull`. O endpoint recusa com 403, porque a
+resposta é enviada antes do sync rodar: sem a guarda, o botão diria "iniciado" e a
+falha morreria no log do servidor.
 
 ### Atualização automática
 
