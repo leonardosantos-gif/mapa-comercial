@@ -994,39 +994,30 @@
   }
 
   /**
-   * Faturamento mensal declarado na planilha (topo de cada aba mensal).
+   * Faturamento mensal da aba PEDIDOS FATURADOS.
    *
-   * Fonte diferente do grafico de cima de proposito: aquele soma os lancamentos
-   * (e responde aos filtros), este e o total que o comercial declara no mes. Sao
-   * numeros que nao batem sempre -- a divergencia e informacao, nao defeito, e o
-   * tooltip mostra os dois lado a lado.
+   * Serie propria, vinda direto da planilha: agrupa pela coluna FATURAMENTO (o
+   * mes em que o pedido foi faturado), nao pela CADASTRO. Usar a de cadastro
+   * fazia junho/2026 aparecer com R$ 451 mil em vez dos R$ 615 mil que a aba
+   * soma. Como e um total de aba, nao responde aos filtros -- a nota avisa.
    */
-  function renderGraficoFaturamento(meses, alvo = '#grafico-faturamento') {
+  function renderGraficoFaturamento(fat, alvo = '#grafico-faturamento') {
     const el = $(alvo);
     el.innerHTML = '';
     const nota = $('#nota-faturamento');
+    const meses = fat?.meses ?? [];
+
     if (!meses.length) {
-      el.innerHTML = '<div class="g-vazio">Sem período no filtro atual.</div>';
+      el.innerHTML = `<div class="g-vazio">${fat?.erro ? `Não foi possível ler a aba: ${esc(fat.erro)}` : 'A aba PEDIDOS FATURADOS não retornou meses.'}</div>`;
       if (nota) nota.hidden = true;
       return;
     }
 
-    // O declarado e um total de aba: um numero por mes, da planilha inteira.
-    // Com filtro de recorte ativo ele deixa de ser comparavel com as barras,
-    // entao sai do tooltip.
-    const recorteAtivo = ['rep', 'cliente', 'uf', 'municipio', 'produto', 'sku', 'busca']
-      .some((k) => (Array.isArray(st.filtros[k]) ? st.filtros[k].length : st.filtros[k]));
-
-    // A aba PEDIDOS FATURADOS nao cobre mes que tenha aba mensal propria
-    // (agosto/2026 esta em AGOSTO2026). Sem este aviso, a barra vazia parece
-    // mes sem faturamento.
     if (nota) {
-      const semLinha = meses.filter((d) => !d.valor_faturado && d.valor).map((d) => fMes(d.mes_ref));
       nota.hidden = false;
-      nota.textContent = 'Faturamento conforme a aba PEDIDOS FATURADOS da planilha.'
-        + (semLinha.length
-          ? ` ${semLinha.join(', ')} não aparece nessa aba — está na aba mensal do próprio mês, então fica fora desta soma.`
-          : '');
+      nota.textContent = `Soma da coluna VALOR da aba ${fat.aba}, agrupada pela coluna FATURAMENTO `
+        + `(${fNum(fat.linhas)} linhas, total ${fMoedaC(fat.total)}). `
+        + 'É o número da planilha inteira: não é recortado pelos filtros do dashboard.';
     }
 
     const larg = el.clientWidth || 520;
@@ -1049,45 +1040,25 @@
       .call((g) => g.selectAll('line').attr('stroke', '#eef1f5'))
       .call((g) => g.selectAll('text').attr('fill', '#8a94a3').attr('font-size', 10));
 
-    // fundo = vendido no mes; barra cheia = a parte que esta faturada. A altura
-    // da barra clara e a leitura direta do que falta faturar.
+    const media = meses.reduce((s, d) => s + d.valor, 0) / meses.length;
+    svg.append('line')
+      .attr('x1', m.e).attr('x2', larg - m.d)
+      .attr('y1', y(media)).attr('y2', y(media))
+      .attr('stroke', '#b6bfcc').attr('stroke-width', 1).attr('stroke-dasharray', '4 3');
+
     svg.append('g').selectAll('rect').data(meses).join('rect')
       .attr('x', (d) => x(d.mes_ref))
       .attr('width', x.bandwidth())
       .attr('y', (d) => y(d.valor))
       .attr('height', (d) => Math.max(0, alt - m.b - y(d.valor)))
       .attr('rx', 3)
-      .attr('fill', '#eef1f5');
-
-    const barras = svg.append('g').selectAll('rect').data(meses).join('rect')
-      .attr('x', (d) => x(d.mes_ref))
-      .attr('width', x.bandwidth())
-      .attr('y', (d) => y(d.valor_faturado))
-      .attr('height', (d) => Math.max(0, alt - m.b - y(d.valor_faturado)))
-      .attr('rx', 3)
       .attr('fill', '#8e2338')
-      .style('cursor', 'pointer');
-
-    barras
-      .on('mousemove', (ev, d) => {
-        const aberto = d.valor - d.valor_faturado;
-        const pct = d.valor ? (d.valor_faturado / d.valor) * 100 : 0;
-        mostrarTip(ev, `
+      .on('mousemove', (ev, d) => mostrarTip(ev, `
         <div class="tt-tit">${fMesLongo(d.mes_ref)}</div>
-        <div class="tt-linha"><span>Faturado (aba)</span><b>${fMoedaC(d.valor_faturado)}</b></div>
-        <div class="tt-linha"><span>Total lançado no mês</span><b>${fMoedaC(d.valor)}</b></div>
-        <div class="tt-linha"><span>% na aba de faturados</span><b>${pct.toFixed(0)}%</b></div>
-        <div class="tt-linha"><span>Fora da aba</span><b>${fMoedaC(aberto)}</b></div>
-        <div class="tt-linha"><span>Pedidos na aba</span><b>${fNum(d.pedidos_faturados)} de ${fNum(d.pedidos)}</b></div>
-        ${d.declarado != null && !recorteAtivo ? `<div class="tt-linha"><span>Declarado na planilha</span><b>${fMoedaC(d.declarado)}</b></div>` : ''}
-        <div class="tt-dica">Clique para filtrar só este mês</div>`);
-      })
-      .on('mouseleave', esconderTip)
-      .on('click', (ev, d) => {
-        st.filtros.meses = [d.mes_ref];
-        montarDropdowns();
-        aplicarFiltros();
-      });
+        <div class="tt-linha"><span>Faturado</span><b>${fMoedaC(d.valor)}</b></div>
+        <div class="tt-linha"><span>Pedidos na aba</span><b>${fNum(d.linhas)}</b></div>
+        <div class="tt-linha"><span>Média do período</span><b>${fMoedaC(media)}</b></div>`))
+      .on('mouseleave', esconderTip);
   }
 
   /**
@@ -1838,7 +1809,7 @@
     renderKpis(d.resumo);
     MapaBrasil.definirEstados(st.estados);
     renderGraficoMeses(d.meses);
-    renderGraficoFaturamento(d.meses);
+    renderGraficoFaturamento(d.faturamento);
     renderBarrasProdutos('#barras-produtos', d.produtos);
 
     if (st.nivel.uf) {

@@ -112,6 +112,8 @@ app.get('/api/dashboard', rota((req) => comCache(chaveDe(req), () => ({
   resumo: ag.resumo(req.query),
   estados: ag.porEstado(req.query),
   meses: ag.porMes(req.query),
+  // total por mes da aba PEDIDOS FATURADOS: nao responde aos filtros (ver agregados.js)
+  faturamento: ag.faturamentoMensal(),
   representantes: ag.porRepresentante(req.query),
   produtos: ag.porProduto({ ...req.query, limite: 15 }),
 }))));

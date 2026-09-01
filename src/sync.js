@@ -20,7 +20,7 @@ import {
 } from './db.js';
 import { varejo, matriz, pesquisarPedidos, estatisticas, logErro } from './tiny.js';
 import { prepararGeo, resolverMunicipio, UFS_VALIDAS, norm } from './geo.js';
-import { lerPlanilha, lerTotaisMensais, lerAmostras, lerLeads } from './planilha.js';
+import { lerPlanilha, lerTotaisMensais, lerAmostras, lerLeads, lerFaturamentoMensal } from './planilha.js';
 import { representanteAjustado, recarregarAjustes, listarAjustes } from './ajustes.js';
 import {
   ALVO_MATRIZ, avaliarPedido, ehFaturado, ehCancelado, classificarProduto, produtoPai,
@@ -461,6 +461,14 @@ export async function sincronizar({ full = false, dataInicial, dataFinal, onLog 
 
     const totaisMensais = await lerTotaisMensais();
     setMeta('totais_planilha', totaisMensais);
+
+    // Faturamento mensal lido direto da aba PEDIDOS FATURADOS, agrupado pela
+    // coluna FATURAMENTO. Fica fora da tabela de fatos de proposito: e o numero
+    // que o comercial confere somando a coluna na planilha, sem deduplicacao.
+    const faturamento = await lerFaturamentoMensal();
+    setMeta('faturamento_mensal', faturamento);
+    if (faturamento.erro) log(`AVISO: faturamento mensal nao lido: ${faturamento.erro}`);
+    else log(`faturamento (aba ${faturamento.aba}): ${faturamento.meses.length} meses, ${faturamento.linhas} linhas`);
     setMeta('abas_planilha', planilha.abas);
 
     // ---- 5. alertas ----

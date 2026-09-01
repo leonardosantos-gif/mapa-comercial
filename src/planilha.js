@@ -423,3 +423,63 @@ export async function lerLeads() {
   }
   return { campanhas, aba: aba.nome };
 }
+
+/**
+ * Faturamento mensal conforme a aba PEDIDOS FATURADOS.
+ *
+ * Agrupa pela coluna FATURAMENTO (data em que o pedido foi faturado), nao pela
+ * CADASTRO (data em que o pedido entrou) -- sao colunas diferentes na aba, e
+ * usar a de cadastro faz junho/2026 aparecer com R$ 451 mil em vez de R$ 615
+ * mil, porque pedido cadastrado em maio e faturado em junho cai no mes errado.
+ *
+ * Le a aba direto, SEM as regras de deduplicacao da base: o objetivo deste
+ * numero e bater com o que o comercial ve ao somar a coluna na planilha. Por
+ * isso ele nao responde aos filtros do dashboard -- a tela avisa.
+ */
+export async function lerFaturamentoMensal() {
+  const abas = await descobrirAbas();
+  const aba = abas.find((a) => tipoDaAba(a.nome) === 'faturados');
+  if (!aba) return { aba: null, meses: [], total: 0, linhas: 0, sem_data: 0 };
+
+  let linhas;
+  try {
+    linhas = parseCsv(await baixarCsv(aba.gid));
+  } catch (e) {
+    // Sem engolir: uma falha aqui zeraria o grafico sem explicar por que.
+    return { aba: aba.nome, meses: [], total: 0, linhas: 0, sem_data: 0, erro: e.message };
+  }
+
+  const iCab = linhas.findIndex((l) => norm(l[0]) === 'NOME DO CLIENTE');
+  if (iCab < 0) return { aba: aba.nome, meses: [], total: 0, linhas: 0, sem_data: 0, erro: 'cabecalho nao encontrado' };
+  const cab = linhas[iCab].map(norm);
+  const iData = cab.indexOf('FATURAMENTO');
+  const iValor = cab.indexOf('VALOR');
+  if (iData < 0 || iValor < 0) {
+    return { aba: aba.nome, meses: [], total: 0, linhas: 0, sem_data: 0, erro: 'colunas FATURAMENTO/VALOR nao encontradas' };
+  }
+
+  const porMes = new Map();
+  let total = 0; let n = 0; let semData = 0;
+  for (const l of linhas.slice(iCab + 1)) {
+    if (!String(l[0] ?? '').trim()) continue;
+    const valor = valorBr(l[iValor]);
+    if (!valor) continue;
+    n += 1;
+    total += valor;
+    const d = dataPlanilha(l[iData]);
+    if (!d) { semData += 1; continue; }
+    const mes = d.slice(0, 7);
+    const atual = porMes.get(mes) ?? { mes_ref: mes, valor: 0, linhas: 0 };
+    atual.valor += valor;
+    atual.linhas += 1;
+    porMes.set(mes, atual);
+  }
+
+  return {
+    aba: aba.nome,
+    meses: [...porMes.values()].sort((a, b) => a.mes_ref.localeCompare(b.mes_ref)),
+    total,
+    linhas: n,
+    sem_data: semData,
+  };
+}

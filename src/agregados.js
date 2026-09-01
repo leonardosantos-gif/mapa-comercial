@@ -444,18 +444,9 @@ export function porRepresentante(q) {
 /** Serie temporal (para acompanhar a mudanca de concentracao mes a mes). */
 export function porMes(q) {
   const { where, par } = construirFiltro(q);
-  const linhas = db.prepare(`
+  return db.prepare(`
     SELECT p.mes_ref,
            COALESCE(SUM(p.total), 0)       AS valor,
-           -- Faturamento = linhas que vieram da aba PEDIDOS FATURADOS da
-           -- planilha, que e a fonte que o comercial usa. Nao e derivado da
-           -- situacao do pedido nem da "data_faturamento" (esta ultima existe
-           -- em so 172 dos 223 lancamentos).
-           -- Atencao: a aba nao cobre os meses que tem aba mensal propria --
-           -- agosto/2026 esta em AGOSTO2026, entao fica fora desta soma. A tela
-           -- avisa quais meses do filtro nao tem linha nesta aba.
-           COALESCE(SUM(CASE WHEN p.aba = 'PEDIDOS FATURADOS' THEN p.total ELSE 0 END), 0) AS valor_faturado,
-           COUNT(DISTINCT CASE WHEN p.aba = 'PEDIDOS FATURADOS' THEN p.uid END) AS pedidos_faturados,
            COUNT(DISTINCT p.uid)           AS pedidos,
            COUNT(DISTINCT p.cliente_chave) AS clientes,
            COUNT(DISTINCT p.uf)            AS estados,
@@ -463,16 +454,21 @@ export function porMes(q) {
            COALESCE(SUM(p.qtd_pecas), 0)   AS pecas
       FROM pedidos p WHERE ${where} AND p.mes_ref IS NOT NULL
      GROUP BY p.mes_ref ORDER BY p.mes_ref`).all(...par);
+}
 
-  // `declarado` = total que a planilha escreve no topo da aba mensal. Só existe
-  // para os meses que TEM aba mensal -- em 01/09/2026 a planilha ficou apenas
-  // com AGOSTO2026 e SETEMBRO2026, e os meses anteriores passaram a vir das
-  // abas de status. Por isso o grafico de faturamento usa `valor_faturado`, que
-  // existe em todos os meses, e traz o declarado apenas como conferencia.
-  let declarados = [];
-  try { declarados = JSON.parse(getMeta('totais_planilha') ?? '[]'); } catch { declarados = []; }
-  const porMesDeclarado = new Map(declarados.map((d) => [d.mes_ref, d.total_planilha]));
-  return linhas.map((l) => ({ ...l, declarado: porMesDeclarado.get(l.mes_ref) ?? null }));
+/**
+ * Faturamento mensal da aba PEDIDOS FATURADOS, como o sync leu da planilha.
+ *
+ * E um total por mes, agrupado pela coluna FATURAMENTO da aba, sem passar pelas
+ * regras de deduplicacao da base -- serve para bater com o que o comercial ve
+ * somando a coluna na planilha. Por isso NAO responde aos filtros.
+ */
+export function faturamentoMensal() {
+  try {
+    const bruto = JSON.parse(getMeta('faturamento_mensal') ?? 'null');
+    if (bruto?.meses) return bruto;
+  } catch { /* meta ausente ou invalido: cai no vazio abaixo */ }
+  return { aba: null, meses: [], total: 0, linhas: 0, sem_data: 0 };
 }
 
 /** Concentracao por UF ao longo dos meses (share % por mes). */
