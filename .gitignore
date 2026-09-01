@@ -1,19 +1,30 @@
 # credenciais -- nunca versionar
 .env
 
-# dados gerados (banco, cache geografico) e logs
-data/
+# dependencias e temporarios
+node_modules/
+*.tmp
+*.tmp.mjs
 logs/
 *.log
+
+# banco de trabalho e backups: gerados pelo sync, mudam a cada hora
 *.db
 *.db-wal
 *.db-shm
 *.bak
 *.bak[0-9]
 
-# dependencias
-node_modules/
-
-# temporarios
-*.tmp
-*.tmp.mjs
+# Dados gerados ficam de fora, com DUAS excecoes: o snapshot do banco e a base
+# geografica do IBGE. Sem elas, quem clona o repositorio sobe o dashboard vazio
+# -- nao ha como rodar o sync sem as credenciais. Ver "Como abrir" no README.
+# A ordem importa: as excecoes precisam vir depois de `*.db`.
+data/*
+!data/geo/
+data/geo/*
+!data/geo/uf.geojson
+!data/geo/ufs.json
+!data/geo/municipios.json
+!data/snapshot/
+data/snapshot/*
+!data/snapshot/mapa-fiber.db

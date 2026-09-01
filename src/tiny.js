@@ -36,11 +36,13 @@ export function logErro(contexto, mensagem) {
 }
 
 export function makeClient(token, label = '') {
-  if (!token) throw new Error(`Token ausente (${label})`);
   let ultimaChamada = 0;
   let fila = Promise.resolve();
 
   async function executar(endpoint, params) {
+    // Erro na CHAMADA, nao no import: sem isso o `server.js` nem sobe quando
+    // falta o .env, e quem so quer consultar o banco ja sincronizado trava.
+    if (!token) throw new Error(`Token ausente (${label}): defina TINY_TOKEN / TINY_TOKEN_MATRIZ no .env para sincronizar.`);
     const espera = INTERVALO_MS - (Date.now() - ultimaChamada);
     if (espera > 0) await sleep(espera);
     ultimaChamada = Date.now();
@@ -98,6 +100,14 @@ export function makeClient(token, label = '') {
 
 export const varejo = makeClient(process.env.TINY_TOKEN, 'b2b');
 export const matriz = makeClient(process.env.TINY_TOKEN_MATRIZ, 'matriz');
+
+/** Quais contas tem token. Permite rodar em modo somente-leitura sem .env. */
+export const credenciais = {
+  get b2b() { return Boolean(process.env.TINY_TOKEN); },
+  get matriz() { return Boolean(process.env.TINY_TOKEN_MATRIZ); },
+  get planilha() { return Boolean(process.env.PLANILHA_PUB_ID); },
+  get completo() { return this.b2b && this.matriz && this.planilha; },
+};
 
 /** Percorre todas as paginas de pedidos.pesquisa.php. */
 export async function pesquisarPedidos(client, filtro, onProgresso) {

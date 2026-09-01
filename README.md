@@ -16,8 +16,29 @@ representante, cliente, período, estado e tipo de operação.
 
 ## Subir
 
+O repositório já vem com um **snapshot dos dados** (`data/snapshot/mapa-fiber.db`) e
+com a **base geográfica do IBGE** (`data/geo/`). Quem só quer consultar não precisa de
+credencial nenhuma:
+
 ```bash
-npm run geo    # baixa a base geográfica do IBGE (uma vez; fica em cache)
+npm install && npm start
+```
+
+Abre em <http://localhost:3110>. Na primeira execução o snapshot é copiado para o
+banco de trabalho (`data/mapa-fiber.db`, fora do git) e o servidor entra em **modo
+somente-leitura**: mostra todos os números, mas não consegue atualizá-los. É o modo
+esperado para quem recebeu o repositório compartilhado.
+
+Requisito: **Node.js 22.5 ou superior** (usa o SQLite nativo, `node:sqlite`). Confira
+com `node -v`; se faltar, baixe em <https://nodejs.org>.
+
+### Para manter os dados atualizados
+
+Só quem tem as credenciais. Copie `.env.example` para `.env`, preencha `TINY_TOKEN`,
+`TINY_TOKEN_MATRIZ` e `PLANILHA_PUB_ID`, e então:
+
+```bash
+npm run geo    # atualiza a base geográfica do IBGE (opcional: já vem no repo)
 ```
 
 ```bash
@@ -29,6 +50,27 @@ npm start      # http://localhost:3110
 ```
 
 A sincronização também roda pela interface, em **Dados → Sincronizar dados agora**.
+
+### Atualizar o snapshot que os outros veem
+
+O banco de trabalho muda a cada hora e **não** vai para o git — se fosse versionado,
+todo sync deixaria o `git status` sujo e o histórico ganharia alguns MB de binário por
+commit. O que vai para o repositório é um snapshot explícito:
+
+```bash
+npm run snapshot
+```
+
+Gera `data/snapshot/mapa-fiber.db` com `VACUUM INTO` (consolida o WAL, desfragmenta, e
+funciona com o servidor no ar). Depois:
+
+```bash
+git add data/snapshot/mapa-fiber.db && git commit -m "Atualiza snapshot dos dados"
+```
+
+Quem já clonou antes recebe o snapshot novo com `git pull`, mas o banco de trabalho
+dele **não** é sobrescrito (a cópia só acontece quando não existe banco). Para forçar,
+apague `data/mapa-fiber.db` e suba o servidor de novo.
 
 ### Atualização automática
 
@@ -282,7 +324,17 @@ da UF). Coordenada nenhuma é digitada à mão. O que não resolve vira alerta e
 ## Segurança
 
 Os tokens ficam só no `.env`, lido pelo backend. O frontend nunca recebe credencial:
-consome exclusivamente os endpoints agregados. O `.env` não deve ir para repositório.
+consome exclusivamente os endpoints agregados.
+
+O `.env` **não vai para o repositório**, e não deve ir. Um token do Tiny commitado
+fica no histórico do git para sempre — um commit posterior removendo o arquivo não
+apaga o blob, e a v2 da API permite escrita (criar pedido, alterar cadastro), não só
+leitura. Para dar acesso a alguém, mande o `.env` por canal privado (gerenciador de
+senhas, mensagem direta) em vez de versionar.
+
+O que **vai** para o repositório é o snapshot do banco — números de venda, nomes de
+cliente, CNPJ e representante, sem nenhuma credencial. É dado comercial interno: o
+repositório precisa continuar **privado**.
 
 ---
 
@@ -297,9 +349,14 @@ src/planilha.js        leitura da planilha publicada (abas descobertas automatic
 src/db.js              schema SQLite
 src/sync.js            orquestração das fontes + conciliação + alertas
 src/agregados.js       consultas agregadas com filtros combinados
+src/comercial.js       KPIs do Cockpit (concentração, carteira, amostras, prospecção)
+src/ajustes.js         reatribuição de representante por cliente (config/)
 src/reclassificar.js   recalcula categoria/produto dos itens sem tocar na API
+src/snapshot.js        gera o snapshot do banco que vai para o repositório
 public/                frontend (index.html, styles.css, app.js, mapa.js, d3 local)
-data/                  banco + cache geográfico
+data/                  banco de trabalho (fora do git)
+data/snapshot/         snapshot versionado: o que quem clona vê
+data/geo/              base geográfica do IBGE (versionada)
 logs/                  erros de API e saída dos syncs
 ```
 

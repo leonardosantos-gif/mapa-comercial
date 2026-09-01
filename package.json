@@ -10,7 +10,8 @@
     "dev": "node --watch server.js",
     "geo": "node src/geo.js",
     "sync": "node src/sync.js",
-    "sync:full": "node src/sync.js --full"
+    "sync:full": "node src/sync.js --full",
+    "snapshot": "node src/snapshot.js"
   },
   "engines": { "node": ">=22.5.0" },
   "dependencies": {

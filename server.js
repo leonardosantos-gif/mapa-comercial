@@ -16,7 +16,7 @@ import { db, getMeta } from './src/db.js';
 import * as ag from './src/agregados.js';
 import * as com from './src/comercial.js';
 import { sincronizar, estadoSync, gerarAlertas } from './src/sync.js';
-import { testarConexao, estatisticas } from './src/tiny.js';
+import { testarConexao, estatisticas, credenciais } from './src/tiny.js';
 import { GEO_DIR } from './src/geo.js';
 import { listarAjustes } from './src/ajustes.js';
 
@@ -237,6 +237,13 @@ function agendarSync() {
     console.log('Atualizacao automatica desligada (SYNC_INTERVALO_MIN=0).');
     return;
   }
+  // Sem credenciais nao ha o que sincronizar. Desligar aqui evita um erro por
+  // hora no log de quem so consulta o banco que veio no repositorio.
+  if (!credenciais.completo) {
+    agendamento.motivo_inativo = 'credenciais ausentes (.env)';
+    console.log('Atualizacao automatica desligada: falta .env (modo somente-leitura).');
+    return;
+  }
   const ms = INTERVALO_MIN * 60_000;
   agendamento.ativo = true;
   agendamento.proxima = new Date(Date.now() + ms).toISOString();
@@ -269,5 +276,14 @@ app.listen(PORT, () => {
   console.log(`\nMapa Comercial Fiber em http://localhost:${PORT}`);
   console.log(`Banco: ${n} pedidos | ultima sync: ${getMeta('ultima_sync') ?? 'nunca'}`);
   if (!n) console.log('AVISO: banco vazio. Rode "npm run sync" para carregar os dados.');
+  if (!credenciais.completo) {
+    const faltam = [
+      credenciais.b2b ? null : 'TINY_TOKEN',
+      credenciais.matriz ? null : 'TINY_TOKEN_MATRIZ',
+      credenciais.planilha ? null : 'PLANILHA_PUB_ID',
+    ].filter(Boolean);
+    console.log('Modo somente-leitura: sem ' + faltam.join(', ') + ' no .env.');
+    console.log('O dashboard mostra os dados do banco; nao consegue atualizar.');
+  }
   agendarSync();
 });

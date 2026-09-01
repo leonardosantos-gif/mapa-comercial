@@ -18,7 +18,24 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, '..', 'data');
 export const DB_PATH = path.join(DATA_DIR, 'mapa-fiber.db');
 
+/**
+ * Snapshot versionado. O banco de trabalho (`DB_PATH`) e gerado pelo sync e
+ * fica fora do git -- muda a cada hora. Sem o snapshot, quem clona o
+ * repositorio sobe o dashboard vazio, porque nao tem como rodar o sync sem as
+ * credenciais. Na primeira execucao copiamos o snapshot para o banco de
+ * trabalho: o arquivo versionado nunca e escrito, entao o `git status` de quem
+ * sincroniza continua limpo.
+ */
+export const SNAPSHOT_PATH = path.join(DATA_DIR, 'snapshot', 'mapa-fiber.db');
+
 fs.mkdirSync(DATA_DIR, { recursive: true });
+
+export let veioDoSnapshot = false;
+if (!fs.existsSync(DB_PATH) && fs.existsSync(SNAPSHOT_PATH)) {
+  fs.copyFileSync(SNAPSHOT_PATH, DB_PATH);
+  veioDoSnapshot = true;
+  console.log('Banco inicializado a partir do snapshot do repositorio.');
+}
 
 export const db = new DatabaseSync(DB_PATH);
 db.exec('PRAGMA journal_mode = WAL');
