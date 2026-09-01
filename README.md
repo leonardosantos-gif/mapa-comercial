@@ -178,11 +178,13 @@ período, porque não têm representante/UF/cliente dos pedidos.
 
 ---
 
-## Ajustes de carteira (representante por cliente)
+## Ajustes de carteira (representante)
 
 O representante vem da coluna VENDEDOR da planilha (e, na falta dela, do vendedor do
 ERP). Quando a carteira troca de dono e a planilha ainda não reflete isso, edite
-`config/representante-por-cliente.json`:
+`config/representante-por-cliente.json`. Há duas granularidades.
+
+**Por cliente** — vale para todos os pedidos dele, inclusive os futuros:
 
 ```json
 {
@@ -194,14 +196,36 @@ ERP). Quando a carteira troca de dono e a planilha ainda não reflete isso, edit
 }
 ```
 
-Precedência: **ajuste > planilha > vendedor do ERP**. Vale para todos os pedidos do
-cliente, inclusive os históricos, e sobrevive à sincronização — editar direto no banco
-seria desfeito, porque o sync reconstrói a tabela de fatos. O casamento é por CNPJ
-(preferido) ou pelo nome do cliente.
+**Por pedido** — na lista `por_pedido`, para cliente com pedidos divididos entre
+representantes:
 
-Os ajustes ativos aparecem em **Dados → Ajustes de carteira**, e as colunas
-`vendedor_sheet` / `vendedor_tiny` continuam gravadas no banco — sempre dá para ver o
-valor original ao lado do ajustado.
+```json
+{
+  "numero": "113",
+  "cliente": "LORENZO RAMOS DA ROSA",
+  "representante": "Key Accounts",
+  "definido_em": "2026-09-01",
+  "obs": "único dos quatro que vai para Key Accounts"
+}
+```
+
+Precedência: **pedido > cliente > planilha > vendedor do ERP**. O mais específico vence,
+então dá para reatribuir um cliente inteiro e abrir exceção para um pedido dele.
+
+O caso que motivou a granularidade por pedido: **Lorenzo Ramos da Rosa** tem 15 pedidos
+com três donos diferentes (Lorenzo, Leonardo Cruz e — antes do ajuste — Daniel Sartori).
+Um ajuste por cliente atropelaria os outros 11. O campo `cliente` no `por_pedido` é
+documentação, não é usado no casamento: o número do pedido é a chave (comparado sem
+zeros à esquerda, e também contra `pedidos_ref`, que cobre pedido composto tipo `127-3`).
+
+Os ajustes sobrevivem à sincronização — editar direto no banco seria desfeito, porque o
+sync reconstrói a tabela de fatos. Aparecem em **Dados → Ajustes de carteira**, e as
+colunas `vendedor_sheet` / `vendedor_tiny` continuam gravadas no banco: sempre dá para
+ver o valor original ao lado do ajustado.
+
+**Cuidado ao reatribuir conta grande:** mover um cliente pode zerar um representante
+inteiro. Ao passar Giovanelli para Key Accounts (01/09/2026), a Fatima ficou sem nenhum
+pedido — os 27 dela eram todos Giovanelli. Confira o antes/depois em **Representantes**.
 
 ---
 ## Produto -> grade de SKUs (projeção de venda e compra)

@@ -1,5 +1,5 @@
 {
-  "descricao": "Reatribuicao manual de representante por cliente. Vence a coluna VENDEDOR da planilha e o vendedor do ERP, e vale para TODOS os pedidos do cliente, inclusive os historicos. Serve para corrigir carteira sem depender de reescrever a planilha. Casamento por CNPJ (preferido) ou pelo nome do cliente.",
+  "descricao": "Reatribuicao manual de representante. Vence a coluna VENDEDOR da planilha e o vendedor do ERP, e vale para TODOS os pedidos alcancados, inclusive os historicos. Serve para corrigir carteira sem depender de reescrever a planilha. Precedencia: `por_pedido` > `ajustes` (cliente) > planilha > ERP.",
   "ajustes": [
     {
       "cnpj": "40.192.126/0001-20",
@@ -35,6 +35,92 @@
       "representante": "Leonardo Cruz",
       "definido_em": "2026-08-31",
       "obs": "reatribuicao de carteira"
+    },
+    {
+      "cnpj": "59.323.452/0001-57",
+      "cliente": "DANIEL GIAGUETO GOMES",
+      "representante": "Leonardo Cruz",
+      "definido_em": "2026-09-01",
+      "obs": "reatribuicao de carteira (cobre os pedidos 76 e 169, que sao todos os do cliente)"
+    },
+    {
+      "cnpj": "37.193.223/0001-22",
+      "cliente": "LIDIANE MOTA MARTINS",
+      "representante": "Leonardo Cruz",
+      "definido_em": "2026-09-01",
+      "obs": "reatribuicao de carteira"
+    },
+    {
+      "cnpj": "08.626.800/0001-24",
+      "cliente": "BISOL CALÇADOS ESPORTIVOS E ARTIGOS ESPORTIVOS LTDA",
+      "representante": "Leonardo Cruz",
+      "definido_em": "2026-09-01",
+      "obs": "reatribuicao de carteira (cobre o pedido 71, unico do cliente)"
+    },
+    {
+      "cnpj": null,
+      "cliente": "JPA PROMOCOES DE VENDAS LTDA",
+      "representante": "Leonardo Cruz",
+      "definido_em": "2026-09-01",
+      "obs": "sem CNPJ no cadastro, casa por nome; cobre o pedido 24339"
+    },
+    {
+      "cnpj": "06.347.409/0296-51",
+      "cliente": "SBF COMERCIO DE PRODUTOS (CENTAURO)",
+      "representante": "Key Accounts",
+      "definido_em": "2026-09-01",
+      "obs": "conta chave: todos os pedidos vao para Key Accounts"
+    },
+    {
+      "cnpj": null,
+      "cliente": "SBF COMERCIO DE PRODUTOS ESPORTIVOS S.A",
+      "representante": "Key Accounts",
+      "definido_em": "2026-09-01",
+      "obs": "segundo cadastro da SBF, sem CNPJ; casa por nome"
+    },
+    {
+      "cnpj": "51.288.816/0001-01",
+      "cliente": "GIOVANELLI DISTRIBUIDORA LTDA",
+      "representante": "Key Accounts",
+      "definido_em": "2026-09-01",
+      "obs": "conta chave: todos os pedidos vao para Key Accounts (eram de Fatima e Daniel Sartori)"
+    },
+    {
+      "cnpj": "02.314.041/0001-88",
+      "cliente": "IGUASPORT LTDA (DECATHLON)",
+      "representante": "Key Accounts",
+      "definido_em": "2026-09-01",
+      "obs": "conta chave: todos os pedidos vao para Key Accounts"
+    }
+  ],
+  "por_pedido": [
+    {
+      "numero": "56",
+      "cliente": "LORENZO RAMOS DA ROSA",
+      "representante": "Leonardo Cruz",
+      "definido_em": "2026-09-01",
+      "obs": "cliente tem pedidos divididos entre representantes; ajuste por pedido, nao por cliente"
+    },
+    {
+      "numero": "110",
+      "cliente": "LORENZO RAMOS DA ROSA",
+      "representante": "Leonardo Cruz",
+      "definido_em": "2026-09-01",
+      "obs": "cliente tem pedidos divididos entre representantes; ajuste por pedido, nao por cliente"
+    },
+    {
+      "numero": "112",
+      "cliente": "LORENZO RAMOS DA ROSA",
+      "representante": "Leonardo Cruz",
+      "definido_em": "2026-09-01",
+      "obs": "cliente tem pedidos divididos entre representantes; ajuste por pedido, nao por cliente"
+    },
+    {
+      "numero": "113",
+      "cliente": "LORENZO RAMOS DA ROSA",
+      "representante": "Key Accounts",
+      "definido_em": "2026-09-01",
+      "obs": "unico dos quatro que vai para Key Accounts"
     }
   ]
 }

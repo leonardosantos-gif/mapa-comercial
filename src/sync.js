@@ -287,7 +287,7 @@ export async function sincronizar({ full = false, dataInicial, dataFinal, onLog 
     recarregarAjustes();
     const infoAjustes = listarAjustes();
     if (infoAjustes.erro) log(`AVISO: config/representante-por-cliente.json invalido: ${infoAjustes.erro}`);
-    else if (infoAjustes.total) log(`ajustes de carteira: ${infoAjustes.total} cliente(s) com representante reatribuido`);
+    else if (infoAjustes.total) log(`ajustes de carteira: ${infoAjustes.total_clientes} cliente(s) + ${infoAjustes.total_pedidos} pedido(s) com representante reatribuido`);
     estadoSync.etapa = 'planilha comercial (base)';
     log('Lendo a planilha comercial publicada...');
     const planilha = await lerPlanilha();
@@ -398,8 +398,8 @@ export async function sincronizar({ full = false, dataInicial, dataFinal, onLog 
         local?.municipio_id ?? null, local?.cidade ?? null, local?.uf ?? null,
         local?.lat ?? null, local?.lon ?? null,
         l.vendedor, olist?.vendedor_tiny ?? null,
-        // precedencia: ajuste manual de carteira > planilha > vendedor do ERP
-        representanteAjustado(cnpj, l.cliente) ?? l.vendedor ?? olist?.vendedor_tiny ?? null,
+        // precedencia: ajuste por pedido > ajuste por cliente > planilha > ERP
+        representanteAjustado(cnpj, l.cliente, l.pedido_olist, l.pedidos_ref) ?? l.vendedor ?? olist?.vendedor_tiny ?? null,
         olist?.natureza ?? null, olist?.tipo_operacao ?? 'VENDA',
         olist?.id_nf ?? null, l.nf, olist?.lista_preco ?? null,
         total, olist?.total ?? null, 0,
