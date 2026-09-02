@@ -8,11 +8,47 @@
 import 'dotenv/config';
 import { norm } from './geo.js';
 import { padronizarRepresentante, padronizarCliente, MESES_PT } from './regras.js';
+import { getMeta, setMeta } from './db.js';
 
 const PUB_ID = process.env.PLANILHA_PUB_ID;
 const BASE = `https://docs.google.com/spreadsheets/d/e/${PUB_ID}`;
 
-/** Descobre as abas (nome + gid) a partir do HTML publicado. */
+/**
+ * Abas ja vistas em qualquer sincronizacao anterior (`meta.gids_conhecidos`).
+ *
+ * Aba OCULTA na planilha sai da listagem do `pubhtml`, mas o CSV por gid
+ * continua respondendo. Sem lembrar dos gids, ocultar uma aba derruba os
+ * numeros em silencio -- foi o que aconteceu em 01/09/2026, quando as abas
+ * MARCO..JULHO2026 foram ocultadas e o total caiu R$ 244.815.
+ *
+ * O registro e CUMULATIVO de proposito: `meta.abas_planilha` guarda so o que o
+ * ultimo sync viu, entao serviria de nada -- na primeira leitura sem a aba, o
+ * gid dela se perderia junto.
+ */
+function abasLembradas() {
+  try {
+    return JSON.parse(getMeta('gids_conhecidos') ?? '[]')
+      .filter((a) => a?.nome && a?.gid)
+      .map((a) => ({ nome: a.nome, gid: String(a.gid) }));
+  } catch {
+    return [];
+  }
+}
+
+/** Soma as abas recem-vistas ao registro cumulativo, sem remover nenhuma. */
+function registrarAbas(abas) {
+  try {
+    const porGid = new Map(abasLembradas().map((a) => [a.gid, a]));
+    for (const a of abas) porGid.set(String(a.gid), { nome: a.nome, gid: String(a.gid) });
+    setMeta('gids_conhecidos', [...porGid.values()]);
+  } catch { /* registro e conveniencia: falhar aqui nao pode parar o sync */ }
+}
+
+/**
+ * Descobre as abas (nome + gid) a partir do HTML publicado, somadas as que ja
+ * foram vistas antes. Uma aba lembrada so e mantida se o CSV dela ainda
+ * responder: assim aba OCULTA continua entrando, e aba DELETADA sai.
+ */
 export async function descobrirAbas() {
   const res = await fetch(`${BASE}/pubhtml`, {
     headers: { 'User-Agent': 'mapa-comercial-fiber/1.0' },
@@ -26,6 +62,17 @@ export async function descobrirAbas() {
     abas.push({ nome: m[1].replace(/\\\//g, '/').trim(), gid: m[2] });
   }
   if (!abas.length) throw new Error('Nao foi possivel descobrir as abas da planilha publicada');
+
+  const listados = new Set(abas.map((a) => a.gid));
+  for (const lembrada of abasLembradas()) {
+    if (listados.has(lembrada.gid)) continue;
+    // uma tentativa so: se a aba foi deletada, nao vale insistir a cada sync
+    try {
+      await baixarCsv(lembrada.gid, 1);
+      abas.push({ ...lembrada, oculta: true });
+    } catch { /* aba deletada ou sem acesso: fica de fora */ }
+  }
+  registrarAbas(abas);
   return abas;
 }
 
