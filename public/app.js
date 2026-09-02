@@ -18,6 +18,8 @@
     nivelProduto: 'produto',
     opcoes: null,
     estados: [],
+    // estados SEM o recorte de UF: base do balao e do clique em outro estado
+    panorama: [],
     cidades: [],
     carregando: 0,
   };
@@ -86,6 +88,25 @@
       if (v !== undefined && v !== null && v !== '') p.set(k, v);
     }
     return p;
+  }
+
+  /**
+   * Mesma consulta, ignorando o recorte de UF.
+   *
+   * Quando um estado esta selecionado, `st.estados` traz so ele -- e ai o balao
+   * nao teria como calcular "% do total nacional" nem achar os dados de outro
+   * estado que o usuario clicasse no mapa. O panorama resolve os dois casos.
+   * Trocar `st.filtros.uf` aqui e seguro: `paramsBase` le o filtro de forma
+   * sincrona, antes de qualquer await, e o `finally` restaura em seguida.
+   */
+  async function apiPanorama(rota, extra = {}) {
+    const guardado = st.filtros.uf;
+    st.filtros.uf = [];
+    try {
+      return await api(rota, extra);
+    } finally {
+      st.filtros.uf = guardado;
+    }
   }
 
   async function api(rota, extra = {}) {
@@ -369,11 +390,20 @@
 
   function voltarBrasil() {
     fecharGaveta();
+    fecharBalao();
     st.nivel = { uf: null, municipio: null, cidade: null, cliente: null, clienteNome: null };
+    // Um estado selecionado tambem recorta os KPIs e os graficos, entao voltar
+    // ao Brasil precisa limpar o filtro -- senao o mapa volta e os numeros nao.
+    if (st.filtros.uf.length) {
+      st.filtros.uf = [];
+      montarDropdowns();
+      return aplicarFiltros();
+    }
     MapaBrasil.focar(null);
     MapaBrasil.definirCidades([]);
     renderBreadcrumb();
     renderRankingLateral();
+    return undefined;
   }
   $('#btn-brasil').addEventListener('click', voltarBrasil);
 
@@ -382,7 +412,7 @@
     await MapaBrasil.iniciar('#mapa', {
       metrica: () => st.metrica,
       onLegenda: renderLegenda,
-      onCliqueEstado: (sigla, ev) => sigla && abrirBalao(sigla, ev),
+      onCliqueEstado: (sigla, ev) => sigla && selecionarEstado(sigla, ev),
       onHoverEstado: (ev, sigla, d) => {
         const nome = st.opcoes?.estados.find((e) => e.valor === sigla)?.nome ?? sigla ?? '—';
         if (!d) {
@@ -486,30 +516,11 @@
     if (rk.dataset.municipio) {
       abrirCidade({ municipio_id: rk.dataset.municipio, cidade: rk.dataset.cidade, uf: rk.dataset.uf });
     } else if (rk.dataset.uf) {
-      abrirBalao(rk.dataset.uf, e);
+      selecionarEstado(rk.dataset.uf, e);
     }
   });
 
   // ------------------------------------------------------- drill: ESTADO
-  async function entrarNoEstado(sigla) {
-    // "EX" (exportacao) nao tem area no mapa nem municipios: filtra em vez de dar zoom
-    if (sigla === 'EX') {
-      st.filtros.uf = ['EX'];
-      montarDropdowns();
-      return aplicarFiltros();
-    }
-    fecharGaveta();
-    st.nivel.uf = sigla;
-    st.nivel.municipio = null;
-    st.nivel.cidade = null;
-    st.nivel.cliente = null;
-    MapaBrasil.focar(sigla);
-    renderBreadcrumb();
-    st.cidades = await api('cidades', { uf: sigla });
-    MapaBrasil.definirCidades(st.cidades);
-    renderRankingLateral();
-  }
-
   // ------------------------------------------------------- drill: CIDADE
   async function abrirCidade(c) {
     st.nivel.uf = c.uf ?? st.nivel.uf;
@@ -646,8 +657,37 @@
    * Diferente do tooltip, que e passageiro: aqui da para ler com calma e seguir
    * para as cidades. Posicionado acima do ponto clicado, com a seta apontando.
    */
+  /**
+   * Clique num estado: recorta TODO o dashboard para ele e abre o balao.
+   *
+   * Clicar de novo no estado ja selecionado desfaz o recorte -- sem isso o
+   * usuario ficaria preso no estado, dependendo do botao "Ver Brasil".
+   */
+  async function selecionarEstado(uf, ev) {
+    const jaSelecionado = st.filtros.uf.length === 1 && st.filtros.uf[0] === uf;
+    if (jaSelecionado) {
+      fecharBalao();
+      st.filtros.uf = [];
+      st.nivel.uf = null;
+      montarDropdowns();
+      return aplicarFiltros();
+    }
+    fecharGaveta();
+    st.nivel.municipio = null;
+    st.nivel.cidade = null;
+    st.nivel.cliente = null;
+    // o balao primeiro, com o panorama em maos: mostra o % nacional do estado
+    abrirBalao(uf, ev);
+    st.filtros.uf = [uf];
+    montarDropdowns();
+    return aplicarFiltros();
+  }
+
   function abrirBalao(uf, ev) {
-    const d = st.estados.find((e) => e.uf === uf);
+    // panorama, nao `st.estados`: com um estado ja recortado, `st.estados` traz
+    // so ele, e o "% do total nacional" viraria 100% para qualquer estado.
+    const base = st.panorama?.length ? st.panorama : st.estados;
+    const d = base.find((e) => e.uf === uf);
     const balao = $('#balao');
     if (!d) { balao.hidden = true; return; }
     const nome = st.opcoes?.estados.find((e) => e.valor === uf)?.nome ?? uf;
@@ -676,46 +716,43 @@
           <b>${esc(d.principal_cidade)}<span class="sub">${fCompacto(d.principal_cidade_valor)}</span></b>
         </div>`}
       </div>
-      ${exterior ? '' : `
-      <div class="balao-acoes">
-        <button class="btn" data-acao="cidades">Ver cidades no mapa</button>
-      </div>`}`;
+      ${exterior || !d.cidades ? '' : `
+      <div class="balao-nota">As ${fNum(d.cidades)} cidades já estão no mapa, ao lado.</div>`}`;
 
     balao.hidden = false;
-    posicionarBalao(ev);
+    // sem `ev`: a posicao vem do mapa, nao do ponto clicado
+    posicionarBalao();
     balao.dataset.uf = uf;
   }
 
-  function posicionarBalao(ev) {
+  /**
+   * Ancora o balao no canto superior DIREITO da area do mapa.
+   *
+   * Antes ele abria sobre o ponto clicado, o que cobria justamente o estado que
+   * acabara de receber o zoom e as bolhas das cidades. Fixo a direita, o mapa
+   * fica visivel e da para ler as cidades e o resumo ao mesmo tempo. Sem seta,
+   * porque nao aponta mais para um ponto.
+   */
+  function posicionarBalao() {
     const balao = $('#balao');
+    const mapa = $('.mapa-wrap') ?? $('#mapa');
     const r = balao.getBoundingClientRect();
-    const alvoX = ev?.clientX ?? window.innerWidth / 2;
-    const alvoY = ev?.clientY ?? window.innerHeight / 2;
-    let x = alvoX - r.width / 2;
-    let y = alvoY - r.height - 14;          // acima do ponto, com folga para a seta
-    const acima = y < 8;
-    if (acima) y = alvoY + 14;             // nao cabe acima: abre abaixo
+    const m = mapa.getBoundingClientRect();
+    const folga = 12;
+    let x = m.right - r.width - folga;
+    let y = m.top + folga;
+    // nunca sair da janela, mesmo com o mapa parcialmente fora da viewport
     x = Math.max(10, Math.min(x, window.innerWidth - r.width - 10));
     y = Math.max(10, Math.min(y, window.innerHeight - r.height - 10));
     balao.style.left = `${x}px`;
     balao.style.top = `${y}px`;
-    balao.classList.toggle('acima', acima);
-    // a seta acompanha o ponto clicado, nao o centro do balao
-    const seta = Math.max(14, Math.min(alvoX - x, r.width - 14));
-    balao.style.setProperty('--seta', `${seta}px`);
   }
 
   const fecharBalao = () => { $('#balao').hidden = true; };
   $('#balao-fechar').addEventListener('click', fecharBalao);
-  $('#balao').addEventListener('click', (e) => {
-    if (e.target.closest('[data-acao="cidades"]')) {
-      const uf = $('#balao').dataset.uf;
-      fecharBalao();
-      entrarNoEstado(uf);
-    }
-  });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fecharBalao(); });
-  window.addEventListener('resize', fecharBalao);
+  // reposiciona em vez de fechar: o balao esta ancorado no mapa, que se move
+  window.addEventListener('resize', () => { if (!$('#balao').hidden) posicionarBalao(); });
 
   // ------------------------------------- cidades de um estado (gaveta)
   /** Cidades do estado, com as vendas. Substitui a antiga aba Cidades. */
@@ -1797,6 +1834,9 @@
 
     const d = await api('dashboard');
     st.estados = d.estados;
+    // Panorama para o balao e para o clique em outro estado. Sem recorte de UF
+    // os dois sao a mesma coisa, e ai nao vale uma segunda chamada.
+    st.panorama = st.filtros.uf.length ? await apiPanorama('estados') : d.estados;
     renderKpis(d.resumo);
     MapaBrasil.definirEstados(st.estados);
     renderGraficoMeses(d.meses);
@@ -1805,8 +1845,11 @@
 
     if (st.nivel.uf) {
       st.cidades = await api('cidades', { uf: st.nivel.uf });
-      MapaBrasil.definirCidades(st.cidades);
+      // `focar` ANTES de `definirCidades`: `desenharBolhas` só desenha quando o
+      // mapa ja tem uma UF selecionada (`visiveis = ufSelecionada ? cidades : []`).
+      // Na ordem inversa as bolhas nao apareciam -- a camada ficava vazia.
       MapaBrasil.focar(st.nivel.uf, { animar: false });
+      MapaBrasil.definirCidades(st.cidades);
     } else {
       st.cidades = [];
       MapaBrasil.definirCidades([]);
