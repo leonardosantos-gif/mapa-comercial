@@ -1004,20 +1004,11 @@
   function renderGraficoFaturamento(fat, alvo = '#grafico-faturamento') {
     const el = $(alvo);
     el.innerHTML = '';
-    const nota = $('#nota-faturamento');
     const meses = fat?.meses ?? [];
 
     if (!meses.length) {
       el.innerHTML = `<div class="g-vazio">${fat?.erro ? `Não foi possível ler a aba: ${esc(fat.erro)}` : 'A aba PEDIDOS FATURADOS não retornou meses.'}</div>`;
-      if (nota) nota.hidden = true;
       return;
-    }
-
-    if (nota) {
-      nota.hidden = false;
-      nota.textContent = `Soma da coluna VALOR da aba ${fat.aba}, agrupada pela coluna FATURAMENTO `
-        + `(${fNum(fat.linhas)} linhas, total ${fMoedaC(fat.total)}). `
-        + 'É o número da planilha inteira: não é recortado pelos filtros do dashboard.';
     }
 
     const larg = el.clientWidth || 520;
