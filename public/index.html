@@ -25,6 +25,7 @@
     <button class="nav-item" data-view="produtos">Produtos</button>
     <button class="nav-item" data-view="representantes">Representantes</button>
     <button class="nav-item" data-view="carteira">Carteira</button>
+    <button class="nav-item" data-view="reposicao">Reposição</button>
     <button class="nav-item" data-view="prospeccao">Prospecção</button>
     <button class="nav-item" data-view="alertas">Alertas <span class="badge" id="badge-alertas"></span></button>
     <button class="nav-item" data-view="admin">Dados</button>
@@ -255,6 +256,31 @@
       <div class="painel-topo"><h3>Pedidos fora da contagem de vendas</h3>
         <span class="dica">regras de negócio aplicadas ao consolidar as fontes</span></div>
       <div class="tabela-wrap"><table class="tabela" id="tab-excluidos"></table></div>
+    </div>
+  </section>
+
+  <!-- =========================== REPOSIÇÃO =========================== -->
+  <section class="view" id="view-reposicao">
+    <div class="kpis" id="kpis-reposicao"></div>
+
+    <div class="painel">
+      <div class="painel-topo">
+        <h3>Venda, estoque e projeção por SKU</h3>
+        <div class="painel-acoes">
+          <input class="busca" id="busca-reposicao" placeholder="Buscar SKU ou produto...">
+          <select class="select-mini" id="cat-reposicao"><option value="todas">Todas as categorias</option></select>
+          <div class="seg" id="seg-sazonal">
+            <button data-sazonal="1" class="ativo" title="Aplica o peso histórico de cada mês">Com sazonalidade</button>
+            <button data-sazonal="0" title="Repete a média dos últimos 90 dias em todos os meses">Média simples</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="rep-situacoes" id="rep-situacoes"></div>
+      <div class="rep-legenda" id="rep-legenda"></div>
+
+      <div class="tabela-wrap"><table class="tabela tabela-rep" id="tab-reposicao"></table></div>
+      <div class="rep-rodape" id="rep-rodape"></div>
     </div>
   </section>
 

@@ -501,3 +501,91 @@ main { padding: 14px 20px 28px; }
    faturamento LOGO ABAIXO de vendas, nao na outra coluna. `min-width: 0`
    impede o SVG de esticar a coluna (os graficos medem clientWidth). */
 .coluna-meses { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+/* ============================ REPOSIÇÃO ============================
+   Tabela larga (venda + estoque + 4 meses de projeção). A leitura depende de
+   bater o olho e achar o vermelho, então a cor carrega o significado e o texto
+   repete: saldo negativo nunca é "só vermelho". */
+
+.rep-situacoes { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 10px; }
+.rep-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border: 1px solid var(--linha); border-radius: 20px;
+  background: var(--branco); color: var(--texto-2); font-size: 12px; font-weight: 550;
+  transition: border-color .12s, color .12s;
+}
+.rep-chip:hover { border-color: var(--texto-3); }
+.rep-chip.ativo { border-color: var(--tinta); color: var(--tinta); background: #fafbfc; }
+.rep-chip b { font-weight: 700; color: var(--texto); font-variant-numeric: tabular-nums; }
+.rep-chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--texto-3); }
+.rep-chip.ruptura i { background: var(--erro); }
+.rep-chip.critico i { background: #ea580c; }
+.rep-chip.atencao i { background: var(--alerta); }
+.rep-chip.ok      i { background: var(--ok); }
+.rep-chip.parado  i { background: var(--texto-3); }
+.rep-chip.todas   i { display: none; }
+
+.rep-legenda {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 0 14px 12px; font-size: 11.5px; color: var(--texto-2);
+}
+.rep-legenda-rot { font-weight: 650; color: var(--texto); }
+.rep-fator {
+  padding: 2px 8px; border-radius: 6px; background: var(--linha-2);
+  font-variant-numeric: tabular-nums;
+}
+.rep-fator.sem-base { background: #fff4e5; color: #a55a00; }
+.rep-legenda-obs { color: var(--texto-3); font-style: italic; }
+
+/* Larguras: colunas numericas e a de SKU encolhem ate o conteudo (width:1% +
+   nowrap) e sobra tudo para o nome do produto. Sem isso o SKU, que e longo nos
+   Byonic (JOLBFBR-GRAY/BLACK-M), engolia a largura e empurrava a projecao --
+   o motivo da aba existir -- para fora da tela. */
+/* , nao : no layout automatico o navegador trata width de
+   celula como sugestao e dava 594px ao SKU contra 144px ao produto. Com 12
+   colunas curtas o layout fixo e previsivel -- as duas primeiras levam 35% e as
+   dez numericas dividem o resto (~6,5% cada, folgado para os valores). */
+/* Layout FIXO, nao automatico: no automatico o navegador trata o width da
+   celula como sugestao e dava 594px ao SKU contra 144px ao produto, deixando
+   a coluna do nome espremida. Com 12 colunas curtas o fixo e previsivel: as
+   duas primeiras levam 35% e as dez numericas dividem o resto. */
+.tabela-rep { table-layout: fixed; width: 100%; }
+.tabela-rep th:first-child  { width: 22%; }
+.tabela-rep th:nth-child(2) { width: 13%; }
+.tabela-rep th, .tabela-rep td { padding-left: 8px; padding-right: 8px; }
+/* o nome do produto pode quebrar; o resto da linha nao */
+.tabela-rep td:first-child { white-space: normal; }
+
+.rep-prod { display: block; font-weight: 650; }
+.rep-var { display: block; font-size: 11px; color: var(--texto-3); margin-top: 1px; }
+.rep-tag {
+  margin-left: 5px; padding: 1px 6px; border-radius: 5px;
+  background: #fff4e5; color: #a55a00; font-size: 10px; font-weight: 600;
+}
+.rep-sem { color: var(--texto-3); }
+
+.rep-cob { display: inline-block; min-width: 42px; font-variant-numeric: tabular-nums; font-weight: 650; }
+.rep-cob.ruptura, .rep-cob.critico { color: var(--erro); }
+.rep-cob.atencao { color: #a55a00; }
+.rep-cob.ok { color: var(--ok); }
+.rep-cob + .mini-barra { margin-left: 6px; width: 40px; }
+
+/* Saldo projetado: o fundo colorido é a informação; o sinal do número confirma. */
+.rep-saldo {
+  display: inline-block; min-width: 46px; padding: 2px 7px; border-radius: 6px;
+  font-variant-numeric: tabular-nums; font-weight: 650; text-align: right;
+}
+.rep-saldo.pos  { background: #e7f6ec; color: #14803c; }
+.rep-saldo.zero { background: var(--linha-2); color: var(--texto-2); }
+.rep-saldo.neg  { background: #fdeaee; color: #b3122c; }
+.rep-entrada {
+  margin-left: 4px; padding: 1px 5px; border-radius: 5px;
+  background: #e8f0fe; color: #1a56b3; font-size: 10.5px; font-weight: 700;
+}
+
+.rep-rodape {
+  display: flex; flex-wrap: wrap; gap: 14px;
+  padding: 10px 14px 2px; font-size: 11.5px; color: var(--texto-3);
+  border-top: 1px solid var(--linha-2);
+}
+.rep-fonte.erro { color: #a55a00; font-weight: 600; }

@@ -271,6 +271,48 @@ CREATE TABLE IF NOT EXISTS alertas (
 );
 CREATE INDEX IF NOT EXISTS ix_al_tipo ON alertas(tipo);
 
+-- ------------------------------------------------------------- reposicao
+-- Catalogo do Portal B2B. Copiado para ca no sync porque o arquivo de origem
+-- vive em outro projeto: assim o snapshot versionado carrega o catalogo junto.
+CREATE TABLE IF NOT EXISTS catalogo_b2b (
+  sku       TEXT PRIMARY KEY,
+  tiny_id   TEXT,
+  produto   TEXT,
+  categoria TEXT,
+  cor       TEXT,
+  tamanho   TEXT,
+  preco     REAL DEFAULT 0,
+  fake      INTEGER DEFAULT 0   -- SKU sintetico do portal, sem cadastro no Tiny
+);
+
+-- Saldo por SKU na conta B2B (produto.obter.estoque.php).
+CREATE TABLE IF NOT EXISTS estoque (
+  sku             TEXT PRIMARY KEY,
+  tiny_id         TEXT,
+  saldo           REAL DEFAULT 0,
+  saldo_reservado REAL DEFAULT 0,
+  atualizado_em   TEXT
+);
+
+-- Itens de ordem de compra da MATRIZ (API v3) = previsao de entrada.
+-- Uma linha por item de OC; nos itens de texto livre o SKU sai da descricao.
+CREATE TABLE IF NOT EXISTS oc_itens (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  oc_id         TEXT,
+  oc_numero     TEXT,
+  data_prevista TEXT,      -- ISO aaaa-mm-dd
+  mes_previsto  TEXT,      -- aaaa-mm
+  situacao      TEXT,
+  categoria     TEXT,
+  colecao       TEXT,      -- Ouro | Prata | Ambas | (sem colecao)
+  sku           TEXT,
+  descricao     TEXT,
+  qtd           REAL DEFAULT 0,
+  b2b           INTEGER DEFAULT 0   -- OC marcada com o marcador "b2b"
+);
+CREATE INDEX IF NOT EXISTS ix_oc_sku ON oc_itens(sku);
+CREATE INDEX IF NOT EXISTS ix_oc_mes ON oc_itens(mes_previsto);
+
 CREATE TABLE IF NOT EXISTS meta (
   chave TEXT PRIMARY KEY,
   valor TEXT
@@ -381,3 +423,37 @@ export const inserirAlerta = db.prepare(`
 INSERT INTO alertas (tipo, gravidade, chave, detalhe, valor, criado_em)
 VALUES (?, ?, ?, ?, ?, ?)
 `);
+
+// ------------------------------------------------------------- reposicao
+export const upsertCatalogoB2B = db.prepare(`
+INSERT INTO catalogo_b2b (sku, tiny_id, produto, categoria, cor, tamanho, preco, fake)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(sku) DO UPDATE SET
+  tiny_id=excluded.tiny_id, produto=excluded.produto, categoria=excluded.categoria,
+  cor=excluded.cor, tamanho=excluded.tamanho, preco=excluded.preco, fake=excluded.fake
+`);
+
+export const upsertEstoque = db.prepare(`
+INSERT INTO estoque (sku, tiny_id, saldo, saldo_reservado, atualizado_em)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(sku) DO UPDATE SET
+  tiny_id=excluded.tiny_id, saldo=excluded.saldo,
+  saldo_reservado=excluded.saldo_reservado, atualizado_em=excluded.atualizado_em
+`);
+
+// Bancos criados antes da coluna `colecao` (o primeiro esboco da aba Reposicao)
+// continuam abrindo: ALTER e barato e roda uma vez so.
+{
+  const cols = db.prepare('PRAGMA table_info(oc_itens)').all().map((c) => c.name);
+  if (!cols.includes('colecao')) db.exec('ALTER TABLE oc_itens ADD COLUMN colecao TEXT');
+}
+
+export const inserirOcItem = db.prepare(`
+INSERT INTO oc_itens (oc_id, oc_numero, data_prevista, mes_previsto, situacao,
+                      categoria, colecao, sku, descricao, qtd, b2b)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
+
+export function limparOcItens() {
+  db.exec('DELETE FROM oc_itens');
+}

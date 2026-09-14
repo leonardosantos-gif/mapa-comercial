@@ -22,6 +22,8 @@ import { varejo, matriz, pesquisarPedidos, estatisticas, logErro } from './tiny.
 import { prepararGeo, resolverMunicipio, UFS_VALIDAS, norm } from './geo.js';
 import { lerPlanilha, lerTotaisMensais, lerAmostras, lerLeads, lerFaturamentoMensal } from './planilha.js';
 import { representanteAjustado, recarregarAjustes, listarAjustes } from './ajustes.js';
+import { sincronizarCatalogo, sincronizarEstoque } from './estoque.js';
+import { sincronizarOcs } from './ocs.js';
 import {
   ALVO_MATRIZ, avaliarPedido, ehFaturado, ehCancelado, classificarProduto, produtoPai,
   padronizarRepresentante, chaveCliente, dataIso, canonizarProdutos, tituloCanonico,
@@ -471,7 +473,40 @@ export async function sincronizar({ full = false, dataInicial, dataFinal, onLog 
     else log(`faturamento (aba ${faturamento.aba}): ${faturamento.meses.length} meses, ${faturamento.linhas} linhas`);
     setMeta('abas_planilha', planilha.abas);
 
-    // ---- 5. alertas ----
+    // ---- 5. reposicao: catalogo do Portal, estoque B2B e OCs da Matriz ----
+    // Depois dos pedidos de proposito: nenhuma destas etapas pode derrubar o
+    // sync do faturamento, que e o coracao do dashboard. Cada uma falha sozinha
+    // e deixa no banco o ultimo dado bom.
+    estadoSync.etapa = 'catalogo e estoque B2B';
+    const repo = { catalogo: null, estoque: null, ocs: null };
+    try {
+      repo.catalogo = sincronizarCatalogo();
+      log(`catalogo B2B: ${repo.catalogo.skus} SKUs`);
+      repo.estoque = await sincronizarEstoque((i, t) => {
+        estadoSync.progresso = i;
+        estadoSync.total = t;
+      });
+      log(`estoque B2B: ${repo.estoque.ok}/${repo.estoque.skus} SKUs lidos${repo.estoque.falhas ? `, ${repo.estoque.falhas} falhas` : ''}`);
+    } catch (e) {
+      log(`AVISO: estoque nao atualizado: ${e.message}`);
+    }
+
+    estadoSync.etapa = 'ordens de compra (Matriz)';
+    try {
+      repo.ocs = await sincronizarOcs((i, t) => {
+        estadoSync.progresso = i;
+        estadoSync.total = t;
+      });
+      if (repo.ocs.ok) {
+        log(`OCs da Matriz: ${repo.ocs.ocs_pendentes} pendentes, ${repo.ocs.itens} itens, ${repo.ocs.unidades} un${repo.ocs.sem_sku ? ` (${repo.ocs.sem_sku} itens sem SKU reconhecido)` : ''}`);
+      } else {
+        log(`AVISO: previsao de entrada nao atualizada -- ${repo.ocs.motivo}`);
+      }
+    } catch (e) {
+      log(`AVISO: OCs da Matriz nao lidas: ${e.message}`);
+    }
+
+    // ---- 6. alertas ----
     estadoSync.etapa = 'alertas de dados';
     const nAlertas = gerarAlertas(totaisMensais);
 
@@ -489,6 +524,12 @@ export async function sincronizar({ full = false, dataInicial, dataFinal, onLog 
       chamadas_api: estatisticas.chamadas,
       erros: estatisticas.erros,
       alertas: nAlertas,
+      reposicao: {
+        catalogo_skus: repo.catalogo?.skus ?? null,
+        estoque_skus: repo.estoque?.ok ?? null,
+        ocs_itens: repo.ocs?.ok ? repo.ocs.itens : null,
+        ocs_erro: repo.ocs?.ok === false ? repo.ocs.motivo : null,
+      },
       janela: { de, ate },
     };
     db.prepare(`INSERT INTO sync_log (inicio, fim, status, pedidos, itens, chamadas, erros, detalhe)

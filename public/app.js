@@ -298,10 +298,17 @@
     irPara(b.dataset.view);
   });
 
+  /** Abas cujos numeros nao saem do recorte de vendas do topo. */
+  const SEM_FILTROS = new Set(['reposicao', 'admin']);
+
   function irPara(view) {
     st.view = view;
     $$('.nav-item').forEach((n) => n.classList.toggle('ativo', n.dataset.view === view));
     $$('.view').forEach((v) => v.classList.toggle('ativa', v.id === `view-${view}`));
+    // Esconder e mais honesto que deixar visivel sem efeito: em Reposicao o
+    // estoque e a OC sao saldos de hoje, e mexer no periodo nao muda nada.
+    $('#filtros').hidden = SEM_FILTROS.has(view);
+    $('#chips').hidden = SEM_FILTROS.has(view);
     renderView();
   }
 
@@ -314,6 +321,7 @@
     if (v === 'representantes') return renderTabReps();
     if (v === 'vendas') return renderVendas();
     if (v === 'carteira') return renderCarteira();
+    if (v === 'reposicao') return renderReposicao();
     if (v === 'prospeccao') return renderProspeccao();
     if (v === 'alertas') return renderAlertas();
     if (v === 'admin') return renderAdmin();
@@ -1636,6 +1644,162 @@
   $('#barras-pareto').addEventListener('click', (e) => {
     const b = e.target.closest('.barra[data-cliente]');
     if (b) abrirCliente(b.dataset.cliente, b.dataset.nome);
+  });
+
+  // ------------------------------------------------------------- reposicao
+  // Esta aba NAO responde aos filtros do topo (representante, periodo, UF):
+  // estoque e ordem de compra sao saldos de hoje, nao um recorte de vendas.
+  // Por isso a barra de filtros some quando ela esta aberta.
+  const REP_SITUACOES = [
+    { chave: 'ruptura', rot: 'Em ruptura', dica: 'estoque zerado' },
+    { chave: 'critico', rot: 'Crítico', dica: 'menos de 1 mês de cobertura' },
+    { chave: 'atencao', rot: 'Atenção', dica: 'zera dentro da projeção' },
+    { chave: 'ok', rot: 'Saudável', dica: 'atravessa a projeção com saldo' },
+    { chave: 'parado', rot: 'Sem giro', dica: 'nenhuma venda em 90 dias' },
+  ];
+
+  const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const rotuloMes = (m) => `${MESES_CURTOS[Number(m.split('-')[1]) - 1]}/${m.slice(2, 4)}`;
+
+  /** Classe de cor do saldo projetado. */
+  const corSaldo = (n) => (n < 0 ? 'neg' : n === 0 ? 'zero' : 'pos');
+
+  async function renderReposicao() {
+    const d = await api('reposicao', {
+      categoria: st.repCategoria ?? 'todas',
+      situacao: st.repSituacao ?? 'todas',
+      busca: $('#busca-reposicao').value.trim(),
+      sazonal: st.repSazonal ?? '1',
+    });
+
+    // Categorias so na primeira carga, para nao perder a selecao atual.
+    const sel = $('#cat-reposicao');
+    if (sel.options.length <= 1) {
+      const cats = await api('reposicao/categorias');
+      sel.innerHTML = '<option value="todas">Todas as categorias</option>'
+        + cats.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+      sel.value = st.repCategoria ?? 'todas';
+    }
+
+    const r = d.resumo;
+    renderCards('#kpis-reposicao', [
+      { rot: 'SKUs acompanhados', val: fNum(r.skus), sub: `${fNum(r.sem_cadastro)} sem cadastro no ERP` },
+      { rot: 'Estoque hoje', val: `${fNum(r.estoque_un)} un`, sub: `${fMoeda(r.estoque_valor)} a preço de tabela`, destaque: true },
+      { rot: 'Vendido no mês', val: `${fNum(r.venda_mes_un)} un`, sub: `${fNum(r.venda_90d_un)} un em 90 dias` },
+      { rot: 'Entrada prevista', val: `${fNum(r.entrada_prevista_un)} un`, sub: `${fNum(r.em_transito_un)} un já a caminho` },
+      { rot: 'Precisa de compra', val: fNum(r.ruptura + r.critico), sub: `${fNum(r.ruptura)} zerados · ${fNum(r.critico)} críticos` },
+      { rot: 'Estoque sem giro', val: fNum(r.parado), sub: `${fMoeda(r.parado_valor)} parados há 90 dias` },
+    ]);
+
+    $('#rep-situacoes').innerHTML = [{ chave: 'todas', rot: 'Todos', dica: 'sem filtro de situação' }, ...REP_SITUACOES]
+      .map((s) => {
+        const n = s.chave === 'todas' ? r.skus : r[s.chave];
+        const ativo = (st.repSituacao ?? 'todas') === s.chave;
+        return `<button class="rep-chip ${s.chave} ${ativo ? 'ativo' : ''}" data-sit="${s.chave}" title="${esc(s.dica)}">
+                  <i></i>${s.rot}<b>${fNum(n)}</b></button>`;
+      }).join('');
+
+    const faixas = d.sazonalidade.fatores.map((f) => {
+      const txt = f.sem_base ? 'sem base histórica' : `${f.fator.toFixed(2)}× a média`;
+      return `<span class="rep-fator ${f.sem_base ? 'sem-base' : ''}">${rotuloMes(f.mes)}: ${txt}</span>`;
+    }).join('');
+    $('#rep-legenda').innerHTML = d.sazonalidade.ativa
+      ? `<span class="rep-legenda-rot">Peso na projeção:</span>${faixas}
+         <span class="rep-legenda-obs">base de ${d.sazonalidade.meses_base} meses fechados</span>`
+      : '<span class="rep-legenda-rot">Sem sazonalidade:</span><span class="rep-fator">todo mês repete a média de 90 dias</span>';
+
+    const colsMes = d.meses.map((m, i) => ({
+      chave: `m${i}`,
+      rot: rotuloMes(m),
+      num: true,
+      ordenaPor: (l) => l.projecao[i].saldo,
+      render: (l) => {
+        const p = l.projecao[i];
+        const entrada = p.entrada > 0 ? `<span class="rep-entrada" title="entrada prevista de ordem de compra">+${fNum(p.entrada)}</span>` : '';
+        return `<span class="rep-saldo ${corSaldo(p.saldo)}">${fNum(p.saldo)}</span>${entrada}`;
+      },
+    }));
+
+    tabela('#tab-reposicao', [
+      {
+        chave: 'produto',
+        rot: 'Produto',
+        forte: true,
+        render: (l) => `<span class="rep-prod">${esc(l.produto)}</span>`
+          + `<span class="rep-var">${esc([l.cor, l.tamanho].filter(Boolean).join(' · '))}</span>`,
+      },
+      {
+        chave: 'sku',
+        rot: 'SKU',
+        render: (l) => `<span class="pill">${esc(l.sku)}</span>`
+          + (l.sem_cadastro ? '<span class="rep-tag" title="SKU do portal sem cadastro no Tiny: fica sem estoque e sem projeção">sem ERP</span>' : ''),
+      },
+      { chave: 'estoque', rot: 'Estoque', num: true, forte: true, render: (l) => (l.estoque === null ? '<span class="rep-sem">—</span>' : fNum(l.estoque)) },
+      // Rotulos curtos: a coluna tem ~99px no layout fixo e "Vendas do mês"
+      // era cortado no meio. O contexto da aba ja diz que sao unidades vendidas.
+      { chave: 'un_mes', rot: 'Mês atual', num: true, render: (l) => fNum(l.un_mes) },
+      { chave: 'un_90d', rot: '90 dias', num: true, render: (l) => fNum(l.un_90d) },
+      { chave: 'media_mes', rot: 'Média mês', num: true, forte: true, render: (l) => fNum(Math.round(l.media_mes)) },
+      {
+        chave: 'cobertura_meses',
+        rot: 'Cobertura',
+        num: true,
+        // sem venda nao tem cobertura: vai para o fim da ordenacao, nao para o topo
+        ordenaPor: (l) => (l.cobertura_meses === null ? 9999 : l.cobertura_meses),
+        render: (l) => {
+          if (l.cobertura_meses === null) return '<span class="rep-sem">—</span>';
+          const largura = Math.min(100, (l.cobertura_meses / 6) * 100);
+          return `<span class="rep-cob ${l.situacao}">${l.cobertura_meses.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m</span>`
+            + `<span class="mini-barra"><i style="width:${largura}%"></i></span>`;
+        },
+      },
+      {
+        chave: 'entrada_total',
+        rot: 'Entrada',
+        num: true,
+        render: (l) => {
+          if (!l.entrada_total) return '<span class="rep-sem">—</span>';
+          // "a caminho" ja esta somado ao saldo inicial da cascata; marcar deixa
+          // claro que aquelas unidades nao aparecem em nenhuma coluna de mes.
+          const transito = l.em_transito
+            ? `<span class="rep-entrada" title="previsto para este mês ou atrasado; já somado ao saldo de partida">${fNum(l.em_transito)} a caminho</span>`
+            : '';
+          return `${fNum(l.entrada_total)}${transito}`;
+        },
+      },
+      ...colsMes,
+    ], d.linhas, {
+      ordem: { col: 'cobertura_meses', dir: 'asc' },
+      dataset: (l) => `data-sit="${l.situacao}"`,
+    });
+
+    const f = d.fontes;
+    const quando = (x) => (x ? new Date(x).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'nunca');
+    $('#rep-rodape').innerHTML = `
+      <span class="rep-fonte">Estoque (Tiny B2B): ${fNum(f.estoque.skus)} SKUs · ${quando(f.estoque.quando)}</span>
+      <span class="rep-fonte">Vendas (planilha + ERP): ${quando(f.vendas.quando)}</span>
+      ${f.ocs.erro
+        ? `<span class="rep-fonte erro">Previsão de entrada indisponível — ${esc(f.ocs.erro)}</span>`
+        : `<span class="rep-fonte">Ordens de compra (Matriz): ${fNum(f.ocs.itens)} itens · ${quando(f.ocs.quando)}</span>`}`;
+  }
+
+  $('#busca-reposicao').addEventListener('input', () => renderReposicao());
+  $('#cat-reposicao').addEventListener('change', (e) => {
+    st.repCategoria = e.target.value;
+    renderReposicao();
+  });
+  $('#rep-situacoes').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-sit]');
+    if (!b) return;
+    st.repSituacao = b.dataset.sit;
+    renderReposicao();
+  });
+  $('#seg-sazonal').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-sazonal]');
+    if (!b) return;
+    st.repSazonal = b.dataset.sazonal;
+    $$('#seg-sazonal button').forEach((x) => x.classList.toggle('ativo', x === b));
+    renderReposicao();
   });
 
   async function renderAlertas() {
