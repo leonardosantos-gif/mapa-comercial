@@ -28,3 +28,6 @@ data/geo/*
 !data/snapshot/
 data/snapshot/*
 !data/snapshot/mapa-fiber.db
+
+# logs das tarefas agendadas (ruido local, um por maquina)
+scripts/*.log
