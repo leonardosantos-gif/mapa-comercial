@@ -19,12 +19,10 @@
 
   <nav class="nav" id="nav">
     <button class="nav-item ativo" data-view="dashboard">Dashboard</button>
-    <button class="nav-item" data-view="estados">Estados</button>
-    <button class="nav-item" data-view="clientes">Clientes</button>
     <button class="nav-item" data-view="vendas">Vendas</button>
-    <button class="nav-item" data-view="produtos">Produtos</button>
     <button class="nav-item" data-view="representantes">Representantes</button>
     <button class="nav-item" data-view="carteira">Carteira</button>
+    <button class="nav-item" data-view="abertos">Em aberto</button>
     <button class="nav-item" data-view="reposicao">Reposição</button>
     <button class="nav-item" data-view="prospeccao">Prospecção</button>
     <button class="nav-item" data-view="alertas">Alertas <span class="badge" id="badge-alertas"></span></button>
@@ -117,28 +115,10 @@
         </div>
       </div>
     </div>
-  </section>
 
-  <!-- ============================ ESTADOS ============================ -->
-  <section class="view" id="view-estados">
-    <div class="painel">
-      <div class="painel-topo"><h3>Análise por estado</h3><span class="dica" id="dica-estados"></span></div>
-      <div class="tabela-wrap"><table class="tabela" id="tab-estados"></table></div>
-    </div>
-  </section>
-
-  <!-- ============================ CLIENTES ============================ -->
-  <section class="view" id="view-clientes">
-    <div class="painel">
-      <div class="painel-topo"><h3>Clientes</h3>
-        <input class="busca" id="busca-cliente" placeholder="Buscar cliente...">
-      </div>
-      <div class="tabela-wrap"><table class="tabela" id="tab-clientes"></table></div>
-    </div>
-  </section>
-
-  <!-- ============================ PRODUTOS ============================ -->
-  <section class="view" id="view-produtos">
+    <!-- Veio da aba Produtos, que deixou de existir. Sem o grafico de barras
+         que ela tinha: o painel "Produtos mais vendidos", logo acima, ja e
+         exatamente esse grafico. -->
     <div class="painel">
       <div class="painel-topo"><h3>Ranking de produtos</h3>
         <div class="painel-acoes">
@@ -149,10 +129,15 @@
           </div>
         </div>
       </div>
-      <div class="barras" id="barras-produtos-full"></div>
       <div class="tabela-wrap"><table class="tabela" id="tab-produtos"></table></div>
     </div>
   </section>
+
+  
+
+  
+
+  
 
   <!-- ========================= REPRESENTANTES ========================= -->
   <section class="view" id="view-representantes">
@@ -256,6 +241,20 @@
       <div class="painel-topo"><h3>Pedidos fora da contagem de vendas</h3>
         <span class="dica">regras de negócio aplicadas ao consolidar as fontes</span></div>
       <div class="tabela-wrap"><table class="tabela" id="tab-excluidos"></table></div>
+    </div>
+  </section>
+
+  <!-- =========================== EM ABERTO =========================== -->
+  <section class="view" id="view-abertos">
+    <div class="kpis kpis-4" id="kpis-abertos"></div>
+
+    <div class="painel">
+      <div class="painel-topo">
+        <h3>Pedidos em aberto</h3>
+        <span class="dica" id="dica-abertos">clique na linha para ver os itens e o que falta</span>
+      </div>
+      <div class="tabela-wrap"><table class="tabela tabela-abertos" id="tab-abertos"></table></div>
+      <div class="rep-rodape" id="abertos-rodape"></div>
     </div>
   </section>
 

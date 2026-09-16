@@ -16,6 +16,7 @@ import { db, getMeta, veioDoSnapshot } from './src/db.js';
 import * as ag from './src/agregados.js';
 import * as com from './src/comercial.js';
 import * as rep from './src/reposicao.js';
+import * as abertos from './src/pedidos-abertos.js';
 import { sincronizar, estadoSync, gerarAlertas } from './src/sync.js';
 import { testarConexao, estatisticas, credenciais } from './src/tiny.js';
 import { GEO_DIR } from './src/geo.js';
@@ -79,6 +80,9 @@ app.get('/api/comercial/prospeccao', rota((req) => comCache(chaveDe(req), () => 
 // atualizadas em etapas separadas do sync, e o cache e invalidado pelo sync.
 app.get('/api/reposicao', rota((req) => rep.reposicao(req.query)));
 app.get('/api/reposicao/categorias', rota(() => rep.categoriasReposicao()));
+
+/** Pedidos em aberto: o que da para faturar hoje e o que o estoque esta travando. */
+app.get('/api/pedidos-abertos', rota(() => abertos.pedidosAbertos()));
 
 /** Envios de amostra de um cliente (a lista de datas abre ao clicar na linha). */
 app.get('/api/comercial/amostras-cliente', (req, res) => {

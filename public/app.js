@@ -299,7 +299,7 @@
   });
 
   /** Abas cujos numeros nao saem do recorte de vendas do topo. */
-  const SEM_FILTROS = new Set(['reposicao', 'admin']);
+  const SEM_FILTROS = new Set(['reposicao', 'abertos', 'admin']);
 
   function irPara(view) {
     st.view = view;
@@ -314,13 +314,14 @@
 
   function renderView() {
     const v = st.view;
-    if (v === 'dashboard') { MapaBrasil.redimensionar(); return; }
-    if (v === 'estados') return renderTabEstados();
-    if (v === 'clientes') return renderTabClientes();
-    if (v === 'produtos') return renderTabProdutos();
+    // O ranking de produtos virou um painel do proprio dashboard: as abas
+    // Estados, Clientes e Produtos sairam (o mapa + ranking lateral ja cobrem
+    // estado e cidade, e a Carteira cobre cliente).
+    if (v === 'dashboard') { MapaBrasil.redimensionar(); renderTabProdutos(); return; }
     if (v === 'representantes') return renderTabReps();
     if (v === 'vendas') return renderVendas();
     if (v === 'carteira') return renderCarteira();
+    if (v === 'abertos') return renderAbertos();
     if (v === 'reposicao') return renderReposicao();
     if (v === 'prospeccao') return renderProspeccao();
     if (v === 'alertas') return renderAlertas();
@@ -764,34 +765,6 @@
 
   // ------------------------------------- cidades de um estado (gaveta)
   /** Cidades do estado, com as vendas. Substitui a antiga aba Cidades. */
-  async function abrirCidadesDoEstado(uf) {
-    const nome = st.opcoes?.estados.find((e) => e.valor === uf)?.nome ?? uf;
-    const cidades = await api('cidades', { uf });
-    const total = cidades.reduce((s, c) => s + c.valor, 0);
-    const max = d3.max(cidades, (c) => c.valor) || 1;
-
-    abrirGaveta(`${esc(nome)} · ${esc(uf)}`,
-      `${cidades.length} cidade${cidades.length === 1 ? '' : 's'} com venda · ${fMoedaC(total)}`, `
-      <div class="g-sec">
-        <div class="g-sec-topo"><h4>Cidades</h4>
-          <span class="dica">clique para ver os clientes</span></div>
-        <div class="g-lista">
-          ${cidades.length ? cidades.map((c) => `
-            <div class="g-item" data-municipio="${esc(c.municipio_id)}" data-cidade="${esc(c.cidade)}" data-uf="${esc(c.uf)}">
-              <div>
-                <div class="g-item-nome">${esc(c.cidade)}</div>
-                <div class="g-item-sub">${fNum(c.pedidos)} pedidos · ${fNum(c.clientes)} clientes · ${esc(c.principal_cliente ?? '—')}</div>
-                <div class="barra-trilha" style="margin-top:5px"><i style="width:${(c.valor / max) * 100}%"></i></div>
-              </div>
-              <div>
-                <div class="g-item-val">${fMoedaC(c.valor)}</div>
-                <div class="g-item-pct">${fPct(c.pct_valor)} do estado</div>
-              </div>
-            </div>`).join('') : '<div class="g-vazio">Nenhuma cidade com venda no filtro atual.</div>'}
-        </div>
-      </div>`);
-  }
-
   // ------------------------------------------------- drill: PRODUTO -> SKUs
   /**
    * Grade de SKUs de um produto. Pensada para projecao de venda e compra:
@@ -957,10 +930,6 @@
   $('#barras-produtos').addEventListener('click', (e) => {
     const b = e.target.closest('.barra[data-produto]');
     if (b) abrirProduto(b.dataset.produto);
-  });
-  $('#barras-produtos-full').addEventListener('click', (e) => {
-    const b = e.target.closest('.barra[data-produto]');
-    if (b && st.nivelProduto === 'produto') abrirProduto(b.dataset.produto);
   });
 
   // ------------------------------------------------------- produtos (dash)
@@ -1217,61 +1186,10 @@
     };
   }
 
-  async function renderTabEstados() {
-    const linhas = st.estados;
-    $('#dica-estados').textContent = `${linhas.length} estados com venda · clique na linha para ver as cidades`;
-    tabela('#tab-estados', [
-      { chave: 'nome', rot: 'Estado', forte: true, render: (l) => `${esc(l.nome)} <span class="pill">${esc(l.uf)}</span>` },
-      { chave: 'valor', rot: 'Valor vendido', num: true, forte: true, render: (l) => fMoedaC(l.valor) },
-      { chave: 'pct_valor', rot: '% nacional', num: true, render: (l) => `${fPct(l.pct_valor)} <span class="mini-barra"><i style="width:${Math.min(100, l.pct_valor)}%"></i></span>` },
-      { chave: 'pedidos', rot: 'Pedidos', num: true, render: (l) => fNum(l.pedidos) },
-      { chave: 'clientes', rot: 'Clientes', num: true, render: (l) => fNum(l.clientes) },
-      { chave: 'cidades', rot: 'Cidades', num: true, render: (l) => fNum(l.cidades) },
-      { chave: 'pecas', rot: 'Peças', num: true, render: (l) => fNum(l.pecas) },
-      { chave: 'ticket', rot: 'Ticket médio', num: true, ordenaPor: (l) => (l.pedidos ? l.valor / l.pedidos : 0), render: (l) => fMoeda(l.pedidos ? l.valor / l.pedidos : 0) },
-    ], linhas, {
-      ordem: { col: 'valor', dir: 'desc' },
-      clicavel: true,
-      dataset: (l) => `data-uf="${esc(l.uf)}"`,
-    });
-    $('#tab-estados').onclick = (e) => {
-      const tr = e.target.closest('tr[data-uf]');
-      if (tr) abrirCidadesDoEstado(tr.dataset.uf);
-    };
-  }
-
-  async function renderTabClientes() {
-    const linhas = await api('clientes', { municipio: st.nivel.municipio ?? '' });
-    const termo = $('#busca-cliente').value.trim().toUpperCase();
-    const vis = termo ? linhas.filter((l) => `${l.cliente_nome} ${l.cnpj ?? ''} ${l.cidade ?? ''}`.toUpperCase().includes(termo)) : linhas;
-    tabela('#tab-clientes', [
-      { chave: 'cliente_nome', rot: 'Cliente', forte: true, render: (l) => esc(l.cliente_nome) },
-      { chave: 'cnpj', rot: 'CNPJ', render: (l) => esc(l.cnpj ?? '—') },
-      { chave: 'cidade', rot: 'Cidade', render: (l) => esc(l.cidade ?? '—') },
-      { chave: 'uf', rot: 'UF', render: (l) => `<span class="pill">${esc(l.uf ?? '—')}</span>` },
-      { chave: 'representante', rot: 'Representante', render: (l) => esc(l.representante ?? '—') },
-      { chave: 'valor', rot: 'Total comprado', num: true, forte: true, render: (l) => fMoedaC(l.valor) },
-      { chave: 'pedidos', rot: 'Pedidos', num: true, render: (l) => fNum(l.pedidos) },
-      { chave: 'ultima_compra', rot: 'Última compra', render: (l) => fData(l.ultima_compra) },
-      { chave: 'principais', rot: 'Principais produtos', semOrdem: true, render: (l) => esc(l.principais_produtos.map((p) => p.produto).join(', ') || '—') },
-    ], vis, {
-      ordem: { col: 'valor', dir: 'desc' },
-      clicavel: true,
-      dataset: (l) => `data-cliente="${esc(l.cliente_chave)}" data-nome="${esc(l.cliente_nome)}"`,
-    });
-    $('#tab-clientes').onclick = (e) => {
-      const tr = e.target.closest('tr[data-cliente]');
-      if (!tr) return;
-      abrirCliente(tr.dataset.cliente, tr.dataset.nome);
-    };
-  }
-  $('#busca-cliente').addEventListener('input', () => renderTabClientes());
-
   async function renderTabProdutos() {
     const linhas = await api('produtos', { nivel: st.nivelProduto, ordem: st.ordemProdutos, limite: 500 });
     const termo = $('#busca-produto').value.trim().toUpperCase();
     const vis = termo ? linhas.filter((l) => `${l.produto ?? ''} ${l.descricao ?? ''} ${l.sku ?? ''}`.toUpperCase().includes(termo)) : linhas;
-    renderBarrasProdutos('#barras-produtos-full', vis.slice(0, 20));
     tabela('#tab-produtos', [
       { chave: 'produto', rot: st.nivelProduto === 'sku' ? 'Variação' : 'Produto', forte: true, render: (l) => esc(st.nivelProduto === 'sku' ? (l.descricao ?? l.produto) : l.produto) },
       { chave: 'sku', rot: 'SKU', render: (l) => `<span class="pill">${esc(l.sku ?? '—')}</span>` },
@@ -1454,6 +1372,11 @@
     tabela('#tab-carteira', [
       { chave: 'cliente_nome', rot: 'Cliente', forte: true,
         render: (l) => `${esc(l.cliente_nome)}${l.top10 ? ' <span class="pill">TOP 10</span>' : ''}` },
+      // Cidade/UF e representante vieram da aba Clientes, que foi removida --
+      // eram a unica informacao que so existia la.
+      { chave: 'cidade', rot: 'Cidade',
+        render: (l) => (l.cidade ? `${esc(l.cidade)} <span class="pill">${esc(l.uf ?? '—')}</span>` : '—') },
+      { chave: 'representante', rot: 'Representante', render: (l) => esc(l.representante ?? '—') },
       { chave: 'estado', rot: 'Situação',
         render: (l) => `<span class="pill ${clsEstado[l.estado]}">${rotEstado[l.estado]}</span>` },
       { chave: 'valor', rot: 'Faturado', num: true, forte: true, render: (l) => fMoedaC(l.valor) },
@@ -1646,6 +1569,127 @@
     if (b) abrirCliente(b.dataset.cliente, b.dataset.nome);
   });
 
+  // ------------------------------------------------------------ em aberto
+  // Fonte diferente do resto do dashboard: a aba "EM ABERTO" da planilha, lida
+  // crua. Esses lancamentos ficam FORA da base de faturamento de proposito,
+  // entao o total daqui nao soma com o KPI de vendas -- e nao deve mesmo.
+  const ESTADO_PEDIDO = {
+    completo: { rot: 'Faturável', cls: 'ok' },
+    travado: { rot: 'Falta item', cls: 'falta' },
+    sem_itens: { rot: 'Sem itens no ERP', cls: 'sem' },
+  };
+  const ESTADO_ITEM = {
+    ok: { rot: 'em estoque', cls: 'ok' },
+    parcial: { rot: 'parcial', cls: 'parcial' },
+    falta: { rot: 'sem estoque', cls: 'falta' },
+    fora_do_armazem: { rot: 'fora do armazém', cls: 'sem' },
+  };
+
+  async function renderAbertos() {
+    const d = await api('pedidos-abertos');
+    const r = d.resumo;
+
+    renderCards('#kpis-abertos', [
+      { rot: 'Total em aberto', val: fMoeda(r.total), sub: `${fNum(r.n)} pedidos · até ${fNum(r.dias_max)} dias`, destaque: true },
+      { rot: 'Dá para faturar', val: fMoeda(r.faturavel_total), sub: `${fNum(r.n_completos)} pedidos com estoque completo` },
+      { rot: 'Travado por estoque', val: fMoeda(r.travado), sub: `${fNum(r.n_travados)} pedidos com algum item em falta` },
+      { rot: 'Faturando o possível', val: fMoeda(r.parcial), sub: `separando o que há; ${fMoeda(r.represado)} ficam represados` },
+    ]);
+
+    tabela('#tab-abertos', [
+      { chave: 'cliente', rot: 'Cliente', forte: true, render: (l) => esc(l.cliente ?? '—') },
+      { chave: 'numero', rot: 'Pedido', render: (l) => `<span class="pill">${esc(l.numero ?? '—')}</span>` },
+      { chave: 'data', rot: 'Cadastro', render: (l) => (l.data ? l.data.split('-').reverse().join('/') : esc(l.data_raw ?? '—')) },
+      {
+        chave: 'dias',
+        rot: 'Dias',
+        num: true,
+        // A faixa de cor segue o print da planilha: quanto mais velho, mais quente.
+        render: (l) => `<span class="ab-dias ${l.dias >= 90 ? 'critico' : l.dias >= 30 ? 'alerta' : 'novo'}">${fNum(l.dias)}</span>`,
+      },
+      { chave: 'valor', rot: 'Valor', num: true, forte: true, render: (l) => fMoedaC(l.valor) },
+      {
+        chave: 'valor_faturavel',
+        rot: 'Faturável agora',
+        num: true,
+        render: (l) => (l.valor_faturavel >= l.valor
+          ? `<span class="ab-val ok">${fMoedaC(l.valor_faturavel)}</span>`
+          : `<span class="ab-val ${l.valor_faturavel > 0 ? 'parcial' : 'falta'}">${fMoedaC(l.valor_faturavel)}</span>`),
+      },
+      {
+        chave: 'estado',
+        rot: 'Situação',
+        render: (l) => {
+          const e = ESTADO_PEDIDO[l.estado] ?? { rot: l.estado, cls: 'sem' };
+          const falta = l.n_faltando ? ` <span class="ab-falta-n">${fNum(l.n_faltando)} de ${fNum(l.n_itens)}</span>` : '';
+          return `<span class="ab-sit ${e.cls}">${e.rot}</span>${falta}`;
+        },
+      },
+    ], d.pedidos, {
+      ordem: { col: 'dias', dir: 'desc' },
+      clicavel: true,
+      dataset: (l) => `data-pedido="${l.id}"`,
+    });
+
+    // A lista de itens entra como uma LINHA extra logo abaixo da clicada, em vez
+    // de gaveta lateral: o comercial compara o pedido com o que falta nele, e
+    // tirar a linha do campo de visao atrapalha essa leitura.
+    $('#tab-abertos').onclick = (e) => {
+      const tr = e.target.closest('tr[data-pedido]');
+      if (!tr) return;
+      const proxima = tr.nextElementSibling;
+      if (proxima?.classList.contains('ab-itens-linha')) {
+        proxima.remove();
+        tr.classList.remove('aberta');
+        return;
+      }
+      $$('.ab-itens-linha').forEach((x) => x.remove());
+      $$('#tab-abertos tr.aberta').forEach((x) => x.classList.remove('aberta'));
+
+      const p = d.pedidos.find((x) => String(x.id) === tr.dataset.pedido);
+      if (!p) return;
+      tr.classList.add('aberta');
+      const linha = document.createElement('tr');
+      linha.className = 'ab-itens-linha';
+      linha.innerHTML = `<td colspan="7">${htmlItens(p)}</td>`;
+      tr.after(linha);
+    };
+
+    const q = (x) => (x ? new Date(x).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'nunca');
+    $('#abertos-rodape').innerHTML = `
+      <span class="rep-fonte">Pedidos: aba EM ABERTO da planilha · itens e SKU do Olist</span>
+      <span class="rep-fonte">Estoque: <b>${esc(d.estoque_de.fonte)}</b> · ${fNum(d.estoque_de.skus)} SKUs · ${q(d.estoque_de.quando)}</span>
+      ${r.itens_sem_info ? `<span class="rep-fonte erro">${fNum(r.itens_sem_info)} itens fora do armazém — contados como indisponíveis</span>` : ''}`;
+  }
+
+  function htmlItens(p) {
+    if (!p.itens.length) return '<div class="g-vazio">Este pedido não tem itens no ERP.</div>';
+    const linhas = p.itens.map((i) => {
+      const e = ESTADO_ITEM[i.estado] ?? { rot: i.estado, cls: 'sem' };
+      const saldo = i.saldo === null ? '—' : fNum(i.saldo);
+      const falta = i.falta > 0 ? `<b>faltam ${fNum(i.falta)}</b>` : '';
+      return `<tr class="ab-item ${e.cls}">
+        <td class="ab-item-sku"><span class="pill">${esc(i.sku ?? '—')}</span></td>
+        <td>${esc(i.descricao)}</td>
+        <td class="num">${fNum(i.qtd)}</td>
+        <td class="num">${saldo}</td>
+        <td class="num">${fNum(i.atende)}</td>
+        <td><span class="ab-item-sit ${e.cls}">${e.rot}</span> ${falta}</td>
+        <td class="num">${fMoedaC(i.valor)}</td>
+      </tr>`;
+    }).join('');
+    return `
+      <div class="ab-itens">
+        <table class="ab-itens-tab">
+          <thead><tr>
+            <th>SKU</th><th>Item</th><th class="num">Pedido</th><th class="num">Estoque</th>
+            <th class="num">Atende</th><th>Situação</th><th class="num">Valor</th>
+          </tr></thead>
+          <tbody>${linhas}</tbody>
+        </table>
+      </div>`;
+  }
+
   // ------------------------------------------------------------- reposicao
   // Esta aba NAO responde aos filtros do topo (representante, periodo, UF):
   // estoque e ordem de compra sao saldos de hoje, nao um recorte de vendas.
@@ -1734,7 +1778,25 @@
         render: (l) => `<span class="pill">${esc(l.sku)}</span>`
           + (l.sem_cadastro ? '<span class="rep-tag" title="SKU do portal sem cadastro no Tiny: fica sem estoque e sem projeção">sem ERP</span>' : ''),
       },
-      { chave: 'estoque', rot: 'Estoque', num: true, forte: true, render: (l) => (l.estoque === null ? '<span class="rep-sem">—</span>' : fNum(l.estoque)) },
+      {
+        chave: 'estoque',
+        rot: 'Estoque',
+        num: true,
+        forte: true,
+        // Saldo do ARMAZEM. Quando o Tiny discorda, a diferenca aparece ao lado --
+        // esconder isso foi o que deixou 268 un fantasma passarem por disponiveis.
+        render: (l) => {
+          if (!l.no_armazem) {
+            return l.fantasma
+              ? `<span class="rep-sem">0</span><span class="rep-fantasma" title="O Tiny mostra ${fNum(l.fantasma)} un, mas o SKU nao existe no armazem">Tiny: ${fNum(l.fantasma)}</span>`
+              : '<span class="rep-sem">0</span>';
+          }
+          const diverge = l.saldo_tiny !== null && l.saldo_tiny !== l.estoque;
+          return diverge
+            ? `${fNum(l.estoque)}<span class="rep-diverge" title="saldo no Tiny">Tiny: ${fNum(l.saldo_tiny)}</span>`
+            : fNum(l.estoque);
+        },
+      },
       // Rotulos curtos: a coluna tem ~99px no layout fixo e "Vendas do mês"
       // era cortado no meio. O contexto da aba ja diz que sao unidades vendidas.
       { chave: 'un_mes', rot: 'Mês atual', num: true, render: (l) => fNum(l.un_mes) },
@@ -1776,7 +1838,7 @@
     const f = d.fontes;
     const quando = (x) => (x ? new Date(x).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'nunca');
     $('#rep-rodape').innerHTML = `
-      <span class="rep-fonte">Estoque (Tiny B2B): ${fNum(f.estoque.skus)} SKUs · ${quando(f.estoque.quando)}</span>
+      <span class="rep-fonte">Estoque: <b>armazém (OMS)</b> · ${fNum(f.estoque.skus)} SKUs · ${quando(f.estoque.quando)}</span>
       <span class="rep-fonte">Vendas (planilha + ERP): ${quando(f.vendas.quando)}</span>
       ${f.ocs.erro
         ? `<span class="rep-fonte erro">Previsão de entrada indisponível — ${esc(f.ocs.erro)}</span>`
@@ -2006,6 +2068,10 @@
     renderGraficoMeses(d.meses);
     renderGraficoFaturamento(d.faturamento);
     renderBarrasProdutos('#barras-produtos', d.produtos);
+    // O ranking de produtos virou painel do dashboard: tem de responder aos
+    // filtros como o resto da tela. Enquanto era uma aba, bastava renderizar na
+    // entrada dela -- aqui isso deixaria a tabela parada no filtro anterior.
+    if (st.view === 'dashboard') renderTabProdutos();
 
     if (st.nivel.uf) {
       st.cidades = await api('cidades', { uf: st.nivel.uf });

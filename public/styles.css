@@ -589,3 +589,73 @@ main { padding: 14px 20px 28px; }
   border-top: 1px solid var(--linha-2);
 }
 .rep-fonte.erro { color: #a55a00; font-weight: 600; }
+
+/* ============================ EM ABERTO ============================
+   Quatro somatorias no topo e, ao clicar no pedido, a lista de itens numa
+   linha logo abaixo -- verde o que tem estoque, vermelho o que falta. */
+
+.kpis-4 { grid-template-columns: repeat(4, 1fr); }
+
+.tabela-abertos th, .tabela-abertos td { white-space: nowrap; }
+.tabela-abertos td:nth-child(2) { width: 1%; }
+.tabela-abertos tr.aberta { background: #f4f7fb; }
+.tabela-abertos tr.aberta td { font-weight: 650; }
+
+.ab-dias {
+  display: inline-block; min-width: 34px; padding: 2px 7px; border-radius: 6px;
+  font-variant-numeric: tabular-nums; font-weight: 650; text-align: right;
+}
+.ab-dias.novo    { background: #e7f6ec; color: #14803c; }
+.ab-dias.alerta  { background: #fff4e5; color: #a55a00; }
+.ab-dias.critico { background: #fdeaee; color: #b3122c; }
+
+.ab-val { font-variant-numeric: tabular-nums; font-weight: 650; }
+.ab-val.ok      { color: #14803c; }
+.ab-val.parcial { color: #a55a00; }
+.ab-val.falta   { color: var(--texto-3); }
+
+.ab-sit {
+  display: inline-block; padding: 2px 8px; border-radius: 20px;
+  font-size: 10.5px; font-weight: 700;
+}
+.ab-sit.ok    { background: #e7f6ec; color: #14803c; }
+.ab-sit.falta { background: #fdeaee; color: #b3122c; }
+.ab-sit.sem   { background: var(--linha-2); color: var(--texto-2); }
+.ab-falta-n { font-size: 10.5px; color: var(--texto-3); }
+
+/* ---- lista de itens do pedido ---- */
+.ab-itens-linha > td { padding: 0 !important; background: #f9fafc; }
+.ab-itens { padding: 10px 14px 14px; }
+.ab-itens-tab { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ab-itens-tab th {
+  text-align: left; padding: 6px 8px; font-size: 10px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--texto-3); border-bottom: 1px solid var(--linha);
+}
+.ab-itens-tab th.num, .ab-itens-tab td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.ab-itens-tab td { padding: 6px 8px; border-bottom: 1px solid var(--linha-2); }
+.ab-itens-tab tbody tr:last-child td { border-bottom: 0; }
+
+/* A cor de fundo e o sinal principal; o rotulo ao lado repete em texto, para
+   nao depender so de cor. */
+.ab-item.ok      { background: #f0faf3; }
+.ab-item.parcial { background: #fff8ee; }
+.ab-item.falta   { background: #fdf1f3; }
+.ab-item.sem     { background: var(--branco); }
+.ab-item-sku .pill { font-size: 10px; }
+
+.ab-item-sit {
+  display: inline-block; padding: 1px 7px; border-radius: 5px;
+  font-size: 10px; font-weight: 700;
+}
+.ab-item-sit.ok      { background: #d8f0e0; color: #14803c; }
+.ab-item-sit.parcial { background: #ffe9c9; color: #a55a00; }
+.ab-item-sit.falta   { background: #fbd5dc; color: #b3122c; }
+.ab-item-sit.sem     { background: var(--linha-2); color: var(--texto-2); }
+
+/* Divergencia de estoque entre o armazem (fonte) e o Tiny (comparacao). */
+.rep-diverge, .rep-fantasma {
+  display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 5px;
+  font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.rep-diverge  { background: var(--linha-2); color: var(--texto-2); }
+.rep-fantasma { background: #fdeaee; color: #b3122c; }

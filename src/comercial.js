@@ -27,12 +27,25 @@ const EM_ABERTO = "('Em Aberto','Em aberto','Preparando Envio','Preparando envio
 /** Ranking de clientes por faturamento, com participacao. */
 function rankingClientes(q) {
   const { where, par } = construirFiltro(q);
+  // Cidade, UF e representante entram aqui porque a aba Clientes, que era o
+  // unico lugar onde apareciam, foi removida -- o dado nao podia sair junto.
+  // Vem do pedido MAIS RECENTE do cliente, nao de um MAX: MAX devolveria o
+  // maior texto em ordem alfabetica, o que mostraria uma cidade antiga em quem
+  // mudou de endereco.
+  const doUltimoPedido = (campo) => `(
+    SELECT x.${campo} FROM pedidos x
+     WHERE x.cliente_chave = p.cliente_chave AND x.${campo} IS NOT NULL AND x.${campo} <> ''
+     ORDER BY x.data DESC LIMIT 1)`;
+
   const linhas = db.prepare(`
     SELECT p.cliente_chave, p.cliente_nome,
            COALESCE(SUM(p.total), 0) v,
            COUNT(DISTINCT p.uid) n,
            MAX(p.mes_ref) ultimo_mes,
-           MIN(p.mes_ref) primeiro_mes
+           MIN(p.mes_ref) primeiro_mes,
+           ${doUltimoPedido('cidade')}        cidade,
+           ${doUltimoPedido('uf')}            uf,
+           ${doUltimoPedido('representante')} representante
       FROM pedidos p WHERE ${where}
      GROUP BY p.cliente_chave
      ORDER BY v DESC`).all(...par);
@@ -82,6 +95,9 @@ export function concentracao(q) {
     pareto: rk.slice(0, 10).map((c, i) => ({
       cliente_chave: c.cliente_chave,
       cliente_nome: c.cliente_nome,
+      cidade: c.cidade,
+      uf: c.uf,
+      representante: c.representante,
       valor: c.v,
       pedidos: c.n,
       part: c.part,
@@ -134,6 +150,9 @@ export function carteira(q) {
     baldes[estado].push({
       cliente_chave: c.cliente_chave,
       cliente_nome: c.cliente_nome,
+      cidade: c.cidade,
+      uf: c.uf,
+      representante: c.representante,
       valor: c.v,
       pedidos: c.n,
       part: c.part,
