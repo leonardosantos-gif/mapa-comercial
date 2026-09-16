@@ -24,6 +24,7 @@ import { lerPlanilha, lerTotaisMensais, lerAmostras, lerLeads, lerFaturamentoMen
 import { representanteAjustado, recarregarAjustes, listarAjustes } from './ajustes.js';
 import { sincronizarCatalogo, sincronizarEstoque } from './estoque.js';
 import { sincronizarOcs } from './ocs.js';
+import { sincronizarEstoqueOms } from './oms.js';
 import {
   ALVO_MATRIZ, avaliarPedido, ehFaturado, ehCancelado, classificarProduto, produtoPai,
   padronizarRepresentante, chaveCliente, dataIso, canonizarProdutos, tituloCanonico,
@@ -477,8 +478,19 @@ export async function sincronizar({ full = false, dataInicial, dataFinal, onLog 
     // Depois dos pedidos de proposito: nenhuma destas etapas pode derrubar o
     // sync do faturamento, que e o coracao do dashboard. Cada uma falha sozinha
     // e deixa no banco o ultimo dado bom.
+    // O ARMAZEM vem primeiro: e ele que manda no saldo do dashboard. O estoque
+    // do Tiny continua sendo lido logo depois, mas so para comparacao.
+    estadoSync.etapa = 'estoque do armazem (OMS)';
+    const repo = { catalogo: null, estoque: null, ocs: null, oms: null };
+    try {
+      repo.oms = await sincronizarEstoqueOms();
+      if (repo.oms.ok) log(`estoque do armazem (OMS): ${repo.oms.skus} SKUs, ${Math.round(repo.oms.unidades)} un`);
+      else log(`AVISO: estoque do armazem nao atualizado -- ${repo.oms.motivo}`);
+    } catch (e) {
+      log(`AVISO: OMS indisponivel: ${e.message}`);
+    }
+
     estadoSync.etapa = 'catalogo e estoque B2B';
-    const repo = { catalogo: null, estoque: null, ocs: null };
     try {
       repo.catalogo = sincronizarCatalogo();
       log(`catalogo B2B: ${repo.catalogo.skus} SKUs`);
@@ -529,6 +541,8 @@ export async function sincronizar({ full = false, dataInicial, dataFinal, onLog 
         estoque_skus: repo.estoque?.ok ?? null,
         ocs_itens: repo.ocs?.ok ? repo.ocs.itens : null,
         ocs_erro: repo.ocs?.ok === false ? repo.ocs.motivo : null,
+        oms_skus: repo.oms?.ok ? repo.oms.skus : null,
+        oms_erro: repo.oms?.ok === false ? repo.oms.motivo : null,
       },
       janela: { de, ate },
     };

@@ -294,6 +294,22 @@ CREATE TABLE IF NOT EXISTS estoque (
   atualizado_em   TEXT
 );
 
+-- Saldo do ARMAZEM (OMS da TPL). Esta e a fonte de verdade de estoque do
+-- dashboard, por decisao do Leonardo em 16/09/2026: o saldo do Tiny carrega
+-- SKUs que o armazem nem conhece (a geracao V1 do Running Fire, por exemplo,
+-- com 268 un que nenhum sync alcanca porque nao existem no OMS) e ficou nos
+-- valores de antes do sync depois da reversao daquele dia.
+-- O saldo do Tiny continua gravado ao lado, na tabela estoque, para a tela
+-- poder mostrar a divergencia em vez de esconde-la.
+-- (Sem crase neste bloco: ele vive dentro de um template literal do JS.)
+CREATE TABLE IF NOT EXISTS estoque_oms (
+  sku           TEXT PRIMARY KEY,
+  descricao     TEXT,
+  ean           TEXT,
+  saldo         REAL DEFAULT 0,
+  atualizado_em TEXT
+);
+
 -- Itens de ordem de compra da MATRIZ (API v3) = previsao de entrada.
 -- Uma linha por item de OC; nos itens de texto livre o SKU sai da descricao.
 CREATE TABLE IF NOT EXISTS oc_itens (
@@ -456,4 +472,16 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
 export function limparOcItens() {
   db.exec('DELETE FROM oc_itens');
+}
+
+export const upsertEstoqueOms = db.prepare(`
+INSERT INTO estoque_oms (sku, descricao, ean, saldo, atualizado_em)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(sku) DO UPDATE SET
+  descricao=excluded.descricao, ean=excluded.ean,
+  saldo=excluded.saldo, atualizado_em=excluded.atualizado_em
+`);
+
+export function limparEstoqueOms() {
+  db.exec('DELETE FROM estoque_oms');
 }

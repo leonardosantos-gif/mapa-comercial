@@ -3,8 +3,12 @@
  *
  * Junta tres fontes que vivem em lugares diferentes:
  *   - venda por SKU  -> tabela de fatos do proprio dashboard (`itens`)
- *   - saldo          -> conta B2B do Tiny, v2 (`estoque`)
+ *   - saldo          -> ARMAZEM, o OMS da TPL (`estoque_oms`); ver src/oms.js
  *   - entrada        -> ordens de compra da MATRIZ, v3 (`oc_itens`)
+ *
+ * O saldo do Tiny (`estoque`) vem junto em `saldo_tiny`, mas nao entra em conta
+ * nenhuma: serve para a tela apontar onde o ERP promete peca que o armazem nao
+ * tem.
  *
  * A projecao repete a logica da planilha "Controle LEO | compras X Estoque":
  * media mensal a partir da venda de 90 dias e um saldo em cascata, mes a mes,
@@ -149,10 +153,16 @@ export function reposicao(q = {}) {
   const vendas = vendaPorSku();
   const entradas = entradaPorSku();
 
+  // O saldo vem do ARMAZEM (estoque_oms), nao do Tiny -- ver src/oms.js para o
+  // porque. O saldo do Tiny vem junto so para a tela poder denunciar a
+  // divergencia; nenhuma conta usa ele.
   const catalogo = db.prepare(`
     SELECT c.sku, c.produto, c.categoria, c.cor, c.tamanho, c.preco, c.fake,
-           e.saldo, e.saldo_reservado, e.atualizado_em
-      FROM catalogo_b2b c LEFT JOIN estoque e ON e.sku = c.sku
+           o.saldo AS saldo, o.sku AS no_armazem,
+           e.saldo AS saldo_tiny, e.saldo_reservado
+      FROM catalogo_b2b c
+      LEFT JOIN estoque_oms o ON o.sku = c.sku
+      LEFT JOIN estoque     e ON e.sku = c.sku
      ORDER BY c.categoria, c.produto, c.cor, c.tamanho`).all();
 
   const mes0 = mesAtual();
@@ -163,7 +173,14 @@ export function reposicao(q = {}) {
     const ent = entradas.get(c.sku.toUpperCase()) ?? { transito: 0, meses: {} };
 
     const media = v.un_90d / 3;
-    const estoque = c.fake ? null : Number(c.saldo ?? 0);
+    // Fora do armazem = SEM estoque, nao "desconhecido". O OMS lista tudo que
+    // existe fisicamente; nao estar la significa que nao ha peca, ainda que o
+    // Tiny mostre saldo (os sete SKUs V1 do Running Fire sao exatamente isso).
+    const noArmazem = c.no_armazem !== null && c.no_armazem !== undefined;
+    const estoque = noArmazem ? Number(c.saldo) : 0;
+    const saldoTiny = c.saldo_tiny === null || c.saldo_tiny === undefined ? null : Number(c.saldo_tiny);
+    // Divergencia que vale mostrar: o Tiny promete peca que o armazem nao tem.
+    const fantasma = !noArmazem && (saldoTiny ?? 0) > 0 ? saldoTiny : 0;
 
     // A cascata parte do saldo de hoje MAIS o que ja deveria ter entrado e nao
     // entrou: essa mercadoria esta comprada, so nao chegou.
@@ -192,7 +209,10 @@ export function reposicao(q = {}) {
       cor: c.cor,
       tamanho: c.tamanho,
       preco: c.preco,
-      sem_cadastro: Boolean(c.fake),
+      sem_cadastro: !noArmazem,
+      no_armazem: noArmazem,
+      saldo_tiny: saldoTiny,
+      fantasma,
       estoque,
       reservado: Number(c.saldo_reservado ?? 0),
       un_mes: v.un_mes,
@@ -204,7 +224,7 @@ export function reposicao(q = {}) {
       em_transito: Math.round(ent.transito),
       projecao,
       // Classificacao que da a cor da linha na tela.
-      situacao: classificar({ estoque, media, cobertura, fake: c.fake, projecao }),
+      situacao: classificar({ estoque, media, cobertura, noArmazem, projecao }),
     };
   });
 
@@ -243,8 +263,8 @@ export function reposicao(q = {}) {
  * negativo em algum ponto -- usar isso como criterio de "critico" jogava quase
  * tudo no mesmo balde e deixava "atencao" inalcancavel.
  */
-function classificar({ estoque, media, cobertura, fake, projecao }) {
-  if (fake) return 'sem_cadastro';
+function classificar({ estoque, media, cobertura, noArmazem, projecao }) {
+  if (!noArmazem) return 'sem_cadastro';
   if (media <= 0) return estoque > 0 ? 'parado' : 'sem_movimento';
   if (estoque <= 0) return 'ruptura';
   if (cobertura < 1) return 'critico';
@@ -289,7 +309,7 @@ function resumir(linhas) {
 
 /** De quando e cada fonte -- a aba mostra isso no rodape. */
 function fontes() {
-  const est = db.prepare('SELECT MAX(atualizado_em) q, COUNT(*) n FROM estoque').get();
+  const est = db.prepare('SELECT MAX(atualizado_em) q, COUNT(*) n FROM estoque_oms').get();
   let ocs = null;
   try { ocs = JSON.parse(getMeta('ultima_sync_ocs') ?? 'null'); } catch { /* meta ausente */ }
   const oc = db.prepare('SELECT COUNT(*) n, MAX(mes_previsto) ate FROM oc_itens').get();
