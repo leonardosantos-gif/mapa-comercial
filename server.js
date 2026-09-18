@@ -82,7 +82,7 @@ app.get('/api/reposicao', rota((req) => rep.reposicao(req.query)));
 app.get('/api/reposicao/categorias', rota(() => rep.categoriasReposicao()));
 
 /** Pedidos em aberto: o que da para faturar hoje e o que o estoque esta travando. */
-app.get('/api/pedidos-abertos', rota(() => abertos.pedidosAbertos()));
+app.get('/api/pedidos-abertos', rota((req) => abertos.pedidosAbertos(req.query)));
 
 /** Envios de amostra de um cliente (a lista de datas abre ao clicar na linha). */
 app.get('/api/comercial/amostras-cliente', (req, res) => {

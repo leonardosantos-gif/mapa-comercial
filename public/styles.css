@@ -659,3 +659,18 @@ main { padding: 14px 20px 28px; }
 }
 .rep-diverge  { background: var(--linha-2); color: var(--texto-2); }
 .rep-fantasma { background: #fdeaee; color: #b3122c; }
+
+/* Produto -> SKU -> quantidade em aberto (aba Em aberto). */
+.tabela-prodab tbody tr { cursor: pointer; }
+.tabela-prodab tr.aberta { background: #f4f7fb; }
+.tabela-prodab tr.aberta td { font-weight: 650; }
+.prodab-skus > td { padding: 0 !important; background: #f9fafc; }
+.prodab-onde { font-size: 11px; color: var(--texto-2); }
+
+/* Linha de soma: o total e o ponto da tela, entao destaca sem virar alarme. */
+.prodab-total td {
+  border-top: 2px solid var(--linha) !important;
+  background: var(--branco);
+  font-variant-numeric: tabular-nums;
+}
+.ab-itens-tab .prodab-total td { background: #f2f5f9; }

@@ -1586,8 +1586,9 @@
   };
 
   async function renderAbertos() {
-    const d = await api('pedidos-abertos');
+    const d = await api('pedidos-abertos', { produto: st.abProduto ?? 'todos' });
     const r = d.resumo;
+    renderAbertosProdutos(d);
 
     renderCards('#kpis-abertos', [
       { rot: 'Total em aberto', val: fMoeda(r.total), sub: `${fNum(r.n)} pedidos · até ${fNum(r.dias_max)} dias`, destaque: true },
@@ -1660,6 +1661,105 @@
       <span class="rep-fonte">Pedidos: aba EM ABERTO da planilha · itens e SKU do Olist</span>
       <span class="rep-fonte">Estoque: <b>${esc(d.estoque_de.fonte)}</b> · ${fNum(d.estoque_de.skus)} SKUs · ${q(d.estoque_de.quando)}</span>
       ${r.itens_sem_info ? `<span class="rep-fonte erro">${fNum(r.itens_sem_info)} itens fora do armazém — contados como indisponíveis</span>` : ''}`;
+  }
+
+  /**
+   * Produto -> SKU -> quantidade em aberto, com a soma no rodape.
+   * Clicar no produto abre a grade de SKUs E recorta a tabela de pedidos.
+   */
+  function renderAbertosProdutos(d) {
+    const sel = d.produto_selecionado;
+
+    tabela('#tab-abertos-produtos', [
+      {
+        chave: 'produto',
+        rot: 'Produto',
+        forte: true,
+        render: (l) => `${esc(l.produto)}${l.produto === sel ? ' <span class="pill alta">filtrando</span>' : ''}`,
+      },
+      { chave: 'n_skus', rot: 'SKUs', num: true, render: (l) => fNum(l.n_skus) },
+      { chave: 'n_pedidos', rot: 'Pedidos', num: true, render: (l) => fNum(l.n_pedidos) },
+      { chave: 'qtd', rot: 'Qtd em aberto', num: true, forte: true, render: (l) => `${fNum(l.qtd)} un` },
+      { chave: 'atende', rot: 'Tem no armazém', num: true, render: (l) => `<span class="ab-val ${l.atende ? 'ok' : 'falta'}">${fNum(l.atende)}</span>` },
+      { chave: 'falta', rot: 'Falta', num: true, render: (l) => (l.falta ? `<span class="ab-val falta">${fNum(l.falta)}</span>` : '—') },
+      { chave: 'valor', rot: 'Valor', num: true, render: (l) => fMoedaC(l.valor) },
+    ], d.produtos, {
+      ordem: { col: 'qtd', dir: 'desc' },
+      clicavel: true,
+      dataset: (l) => `data-produto="${esc(l.produto)}"`,
+    });
+
+    // Rodape com a soma das quantidades -- o "soma total" que o pedido pedia.
+    const tot = d.produtos.reduce((a, p) => ({
+      qtd: a.qtd + p.qtd, atende: a.atende + p.atende, falta: a.falta + p.falta, valor: a.valor + p.valor,
+    }), { qtd: 0, atende: 0, falta: 0, valor: 0 });
+    $('#tab-abertos-produtos').insertAdjacentHTML('beforeend', `
+      <tfoot><tr class="prodab-total">
+        <td class="forte">Total (${fNum(d.produtos.length)} produtos)</td>
+        <td class="num"></td><td class="num"></td>
+        <td class="num forte">${fNum(tot.qtd)} un</td>
+        <td class="num">${fNum(tot.atende)}</td>
+        <td class="num">${fNum(tot.falta)}</td>
+        <td class="num">${fMoedaC(tot.valor)}</td>
+      </tr></tfoot>`);
+
+    // A grade de SKUs e DERIVADA do produto selecionado, nao inserida pelo
+    // clique: o clique dispara `renderAbertos`, que redesenha esta tabela --
+    // uma linha inserida antes disso era apagada no mesmo instante.
+    if (sel) {
+      const tr = $$('#tab-abertos-produtos tr[data-produto]').find((x) => x.dataset.produto === sel);
+      const p = d.produtos.find((x) => x.produto === sel);
+      if (tr && p) {
+        tr.classList.add('aberta');
+        const linha = document.createElement('tr');
+        linha.className = 'prodab-skus';
+        linha.innerHTML = `<td colspan="7">${htmlSkusProduto(p)}</td>`;
+        tr.after(linha);
+      }
+    }
+
+    $('#tab-abertos-produtos').onclick = (e) => {
+      const tr = e.target.closest('tr[data-produto]');
+      if (!tr) return;
+      // Clicar no produto ja aberto fecha a grade e tira o filtro.
+      st.abProduto = tr.dataset.produto === sel ? 'todos' : tr.dataset.produto;
+      renderAbertos();
+    };
+  }
+
+  function htmlSkusProduto(p) {
+    const linhas = p.skus.map((s) => {
+      const cls = !s.no_armazem ? 'sem' : s.falta === 0 ? 'ok' : s.atende > 0 ? 'parcial' : 'falta';
+      const onde = s.pedidos.map((x) => `${x.numero} (${fNum(x.qtd)})`).join(', ');
+      return `<tr class="ab-item ${cls}">
+        <td class="ab-item-sku"><span class="pill">${esc(s.sku ?? '—')}</span></td>
+        <td>${esc(s.descricao)}</td>
+        <td class="num forte">${fNum(s.qtd)}</td>
+        <td class="num">${s.no_armazem ? fNum(s.saldo) : '<span class="rep-sem">—</span>'}</td>
+        <td class="num">${fNum(s.atende)}</td>
+        <td class="num">${s.falta ? fNum(s.falta) : '—'}</td>
+        <td class="prodab-onde">${esc(onde)}</td>
+      </tr>`;
+    }).join('');
+
+    return `
+      <div class="ab-itens">
+        <table class="ab-itens-tab">
+          <thead><tr>
+            <th>SKU</th><th>Item</th><th class="num">Em aberto</th><th class="num">Armazém</th>
+            <th class="num">Atende</th><th class="num">Falta</th><th>Em quais pedidos</th>
+          </tr></thead>
+          <tbody>${linhas}</tbody>
+          <tfoot><tr class="prodab-total">
+            <td colspan="2" class="forte">Soma — ${esc(p.produto)}</td>
+            <td class="num forte">${fNum(p.qtd)} un</td>
+            <td class="num"></td>
+            <td class="num">${fNum(p.atende)}</td>
+            <td class="num">${fNum(p.falta)}</td>
+            <td></td>
+          </tr></tfoot>
+        </table>
+      </div>`;
   }
 
   function htmlItens(p) {

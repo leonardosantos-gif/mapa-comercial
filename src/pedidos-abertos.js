@@ -34,7 +34,7 @@ const diasDesde = (iso) => {
  * soma prometeria um faturamento que o estoque nao cobre. Hoje sao poucos SKUs
  * em disputa, mas a soma e justamente o que a tela promete.
  */
-export function pedidosAbertos() {
+export function pedidosAbertos(q = {}) {
   const linhas = db.prepare(`
     SELECT l.id, l.cliente, l.pedido_olist numero, l.data, l.data_raw, l.valor,
            l.situacao, l.observacoes, l.uid_olist,
@@ -58,6 +58,7 @@ export function pedidosAbertos() {
             LEFT JOIN estoque     e ON e.sku = i.sku
            WHERE i.uid_pedido = ? ORDER BY i.seq`).all(l.uid_olist)
       : [];
+    for (const i of itens) i.produto = i.produto || '(sem produto)';
     itensPorPedido.set(l.id, itens.filter((i) => !IGNORAR_SKU.test(i.sku ?? '')));
   }
 
@@ -100,6 +101,7 @@ export function pedidosAbertos() {
 
       return {
         sku: i.sku,
+        produto: i.produto,
         descricao: i.descricao ?? i.produto ?? '',
         qtd,
         saldo: conhecido ? saldo : null,
@@ -139,7 +141,82 @@ export function pedidosAbertos() {
     };
   });
 
-  return { pedidos, resumo: resumir(pedidos), estoque_de: estoqueDe() };
+  const produtos = agruparPorProduto(pedidos);
+
+  // O filtro por produto recorta os PEDIDOS, nao os itens: o comercial quer ver
+  // quais pedidos seguram aquele produto, com o valor cheio de cada um. O
+  // detalhe por SKU, esse sim so do produto escolhido, vem em `produtos`.
+  const alvo = q.produto && q.produto !== 'todos' ? String(q.produto) : null;
+  const visiveis = alvo
+    ? pedidos.filter((p) => p.itens.some((i) => i.produto === alvo))
+    : pedidos;
+
+  return {
+    pedidos: visiveis,
+    // O resumo segue o recorte: filtrando por produto, as quatro somatorias
+    // passam a falar dos pedidos daquele produto.
+    resumo: resumir(visiveis),
+    produtos,
+    produto_selecionado: alvo,
+    estoque_de: estoqueDe(),
+  };
+}
+
+/**
+ * Quantidade em aberto por produto e, dentro dele, por SKU.
+ *
+ * Sai dos itens JA alocados, entao `atende` e `falta` aqui respeitam a mesma
+ * fila por ordem de cadastro que a tabela de pedidos usa -- somar as duas
+ * telas de jeitos diferentes daria numeros que nao conversam.
+ */
+function agruparPorProduto(pedidos) {
+  const mapa = new Map();
+
+  for (const p of pedidos) {
+    for (const i of p.itens) {
+      if (!mapa.has(i.produto)) {
+        mapa.set(i.produto, { produto: i.produto, skus: new Map(), pedidos: new Set() });
+      }
+      const g = mapa.get(i.produto);
+      g.pedidos.add(p.numero);
+
+      if (!g.skus.has(i.sku)) {
+        g.skus.set(i.sku, {
+          sku: i.sku,
+          descricao: i.descricao,
+          qtd: 0,
+          atende: 0,
+          falta: 0,
+          valor: 0,
+          saldo: i.saldo,
+          no_armazem: i.no_armazem,
+          pedidos: [],
+        });
+      }
+      const s = g.skus.get(i.sku);
+      s.qtd += i.qtd;
+      s.atende += i.atende;
+      s.falta += i.falta;
+      s.valor += i.valor;
+      s.pedidos.push({ numero: p.numero, cliente: p.cliente, qtd: i.qtd, falta: i.falta });
+    }
+  }
+
+  return [...mapa.values()]
+    .map((g) => {
+      const skus = [...g.skus.values()].sort((a, b) => b.qtd - a.qtd);
+      return {
+        produto: g.produto,
+        skus,
+        n_skus: skus.length,
+        n_pedidos: g.pedidos.size,
+        qtd: skus.reduce((s, x) => s + x.qtd, 0),
+        atende: skus.reduce((s, x) => s + x.atende, 0),
+        falta: skus.reduce((s, x) => s + x.falta, 0),
+        valor: skus.reduce((s, x) => s + x.valor, 0),
+      };
+    })
+    .sort((a, b) => b.qtd - a.qtd);
 }
 
 /**
