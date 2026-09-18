@@ -96,20 +96,37 @@ function vendaPorSku() {
 }
 
 /**
- * So MERCADORIA entra como previsao de entrada.
+ * Nem toda "mao de obra" e componente -- e essa distincao decide o que conta
+ * como previsao de entrada.
  *
- * Metade das OCs da Matriz e "Tercerizacao Mao de Obra" -- cabedal e componente,
- * que nao viram saldo vendavel. Nao basta filtrar pela categoria: ela e da OC
- * INTEIRA, e OCs classificadas como "Compra de produto pronto" carregam linhas
- * de mao de obra dentro (`MO-CAB-TFBU-WHITE-36`, "Mao de Obra - Cabedal ..."),
- * que entrariam como se fossem tenis pronto. Por isso o corte tambem olha o SKU
- * e a descricao do item.
+ *   MO-MON-<sku>  Montagem. E o par PRONTO sendo produzido: tirando o prefixo
+ *                 sobra um SKU que existe no catalogo e no armazem. ENTRA.
+ *   MO-CAB-<sku>  Cabedal. Componente, vira calcado so depois de montado. FORA.
+ *
+ * Descobri isso porque as OCs 546 e 547 (1.260 pares de Sapatilha Training All
+ * Black) nao apareciam na tela: estao lancadas como "Tercerizacao Mao de Obra"
+ * e meu corte anterior descartava tudo que comecava com `MO-`. Eram 5.870 un de
+ * montagem sumindo da previsao.
+ *
+ * O corte tambem olha SKU e descricao, nao so a categoria: ela e da OC INTEIRA,
+ * e OCs de "Compra de produto pronto" carregam linhas de mao de obra dentro.
  */
-const SO_MERCADORIA = `
-  (categoria IS NULL OR (categoria NOT LIKE '%Mão de Obra%' AND categoria NOT LIKE '%Mao de Obra%'))
-  AND (sku IS NULL OR sku NOT LIKE 'MO-%')
-  AND (descricao IS NULL OR (descricao NOT LIKE 'Mão de Obra%' AND descricao NOT LIKE 'Mao de Obra%'))
-`;
+const PREFIXO_MONTAGEM = 'MO-MON-';
+
+/** SKU do produto acabado a que um item de OC corresponde. */
+const skuAcabado = (sku) => (sku?.toUpperCase().startsWith(PREFIXO_MONTAGEM)
+  ? sku.slice(PREFIXO_MONTAGEM.length)
+  : sku);
+
+/** O item vira saldo vendavel? Montagem sim; cabedal e demais insumos, nao. */
+function ehMercadoria({ sku, categoria, descricao }) {
+  const s = (sku ?? '').toUpperCase();
+  if (s.startsWith(PREFIXO_MONTAGEM)) return true;
+  if (s.startsWith('MO-')) return false;
+  const maoDeObra = /m[ãa]o de obra/i;
+  if (maoDeObra.test(categoria ?? '') || maoDeObra.test(descricao ?? '')) return false;
+  return true;
+}
 
 /**
  * Entrada prevista por SKU: `{ transito, meses: {aaaa-mm: un} }`.
@@ -121,20 +138,23 @@ const SO_MERCADORIA = `
  */
 function entradaPorSku() {
   const mes0 = mesAtual();
+  // O filtro sai do SQL para o JS: decidir mercadoria envolve prefixo de SKU,
+  // categoria e descricao juntos, e ainda traduzir MO-MON-<sku> no SKU acabado.
   const linhas = db.prepare(`
-    SELECT sku, mes_previsto mes, SUM(qtd) un
+    SELECT sku, categoria, descricao, oc_numero, data_prevista, mes_previsto mes, qtd
       FROM oc_itens
-     WHERE sku IS NOT NULL AND sku <> '' AND mes_previsto IS NOT NULL
-       AND ${SO_MERCADORIA}
-     GROUP BY sku, mes_previsto`).all();
+     WHERE sku IS NOT NULL AND sku <> '' AND mes_previsto IS NOT NULL`).all();
 
   const mapa = new Map();
   for (const l of linhas) {
-    const k = l.sku.toUpperCase();
-    if (!mapa.has(k)) mapa.set(k, { transito: 0, meses: {} });
+    if (!ehMercadoria(l)) continue;
+    const k = skuAcabado(l.sku).toUpperCase();
+    if (!mapa.has(k)) mapa.set(k, { transito: 0, meses: {}, ocs: [] });
     const alvo = mapa.get(k);
-    if (l.mes <= mes0) alvo.transito += l.un;
-    else alvo.meses[l.mes] = (alvo.meses[l.mes] ?? 0) + l.un;
+    if (l.mes <= mes0) alvo.transito += l.qtd;
+    else alvo.meses[l.mes] = (alvo.meses[l.mes] ?? 0) + l.qtd;
+    // Guardar a OC de origem deixa a tela responder "de onde vem essa entrada".
+    alvo.ocs.push({ oc: l.oc_numero, data: l.data_prevista, qtd: l.qtd, montagem: l.sku !== skuAcabado(l.sku) });
   }
   return mapa;
 }
@@ -170,7 +190,7 @@ export function reposicao(q = {}) {
 
   const linhas = catalogo.map((c) => {
     const v = vendas.get(c.sku.toUpperCase()) ?? { un_90d: 0, un_mes: 0, un_total: 0, ultima_venda: null };
-    const ent = entradas.get(c.sku.toUpperCase()) ?? { transito: 0, meses: {} };
+    const ent = entradas.get(c.sku.toUpperCase()) ?? { transito: 0, meses: {}, ocs: [] };
 
     const media = v.un_90d / 3;
     // Fora do armazem = SEM estoque, nao "desconhecido". O OMS lista tudo que
@@ -221,6 +241,7 @@ export function reposicao(q = {}) {
       cobertura_meses: cobertura === null ? null : Number(cobertura.toFixed(1)),
       ultima_venda: v.ultima_venda,
       entrada_total: Math.round(entradaTotal),
+      ocs: ent.ocs,
       em_transito: Math.round(ent.transito),
       projecao,
       // Classificacao que da a cor da linha na tela.

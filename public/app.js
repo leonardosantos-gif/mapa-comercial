@@ -53,6 +53,12 @@
     const [a, m, d] = iso.split('-');
     return `${d}/${m}/${a}`;
   };
+  /** dd/mm -- para etiquetas curtas, onde o ano so ocuparia espaco. */
+  const fDataCurta = (iso) => {
+    if (!iso) return '—';
+    const [, m, d] = iso.split('-');
+    return `${d}/${m}`;
+  };
   const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const fMes = (ref) => {
     if (!ref) return '—';
@@ -1921,12 +1927,21 @@
         num: true,
         render: (l) => {
           if (!l.entrada_total) return '<span class="rep-sem">—</span>';
+          // De QUAL OC e para QUANDO: sem isso a coluna diz que algo vem, mas
+          // nao da para conferir contra a ordem de compra.
+          const origem = (l.ocs ?? [])
+            .map((o) => `OC ${o.oc} · ${fDataCurta(o.data)}${o.montagem ? ' (montagem)' : ''} · ${fNum(o.qtd)} un`)
+            .join('\n');
           // "a caminho" ja esta somado ao saldo inicial da cascata; marcar deixa
           // claro que aquelas unidades nao aparecem em nenhuma coluna de mes.
           const transito = l.em_transito
             ? `<span class="rep-entrada" title="previsto para este mês ou atrasado; já somado ao saldo de partida">${fNum(l.em_transito)} a caminho</span>`
             : '';
-          return `${fNum(l.entrada_total)}${transito}`;
+          const proxima = (l.ocs ?? [])[0];
+          const etiqueta = proxima
+            ? `<span class="rep-oc" title="${esc(origem)}">OC ${esc(String(proxima.oc))} · ${fDataCurta(proxima.data)}</span>`
+            : '';
+          return `${fNum(l.entrada_total)}${transito}${etiqueta}`;
         },
       },
       ...colsMes,

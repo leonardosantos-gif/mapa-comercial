@@ -674,3 +674,9 @@ main { padding: 14px 20px 28px; }
   font-variant-numeric: tabular-nums;
 }
 .ab-itens-tab .prodab-total td { background: #f2f5f9; }
+
+/* Etiqueta da OC de origem na coluna Entrada da Reposicao. */
+.rep-oc {
+  display: block; margin-top: 2px; font-size: 10px; font-weight: 600;
+  color: var(--texto-3); cursor: help;
+}
